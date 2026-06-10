@@ -1,0 +1,160 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/network/models/auth_tokens.dart';
+import '../../../core/network/network_providers.dart';
+import '../../../core/network/storage/token_storage.dart';
+
+abstract class AuthRepository {
+  Future<void> requestOtpForRegister({required String phoneNumber});
+
+  Future<void> loginWithPassword({
+    required String phoneNumber,
+    required String password,
+  });
+
+  Future<void> registerFcmToken({required String fcmToken});
+
+  Future<void> logout();
+
+  Future<void> registerWithOtp({
+    required String phoneNumber,
+    required String password,
+    required String otp,
+  });
+}
+
+
+class ApiAuthRepository implements AuthRepository {
+  ApiAuthRepository({required Dio dio, required TokenStorage tokenStorage})
+    : _dio = dio,
+      _tokenStorage = tokenStorage;
+
+  final Dio _dio;
+  final TokenStorage _tokenStorage;
+
+  @override
+  Future<void> requestOtpForRegister({required String phoneNumber}) async {
+    await _dio.post<dynamic>(
+      '/auth/send-otp',
+      data: {'phoneNumber': phoneNumber},
+      options: Options(extra: {'skipAuth': true}),
+    );
+  }
+
+  @override
+  Future<void> loginWithPassword({
+    required String phoneNumber,
+    required String password,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      '/auth/login',
+      data: {'phoneNumber': phoneNumber, 'password': password},
+      options: Options(extra: {'skipAuth': true}),
+    );
+
+    final tokens = _extractTokens(response.data);
+    await _tokenStorage.save(tokens);
+  }
+
+  @override
+  Future<void> registerFcmToken({required String fcmToken}) async {
+    final payload = {'fcmToken': fcmToken};
+    try {
+      await _dio.patch<dynamic>('/auth/fcm-token', data: payload);
+    } on DioException catch (error) {
+      if (error.response?.statusCode != 404 && error.response?.statusCode != 405) {
+        rethrow;
+      }
+      await _dio.post<dynamic>('/auth/fcm-token', data: payload);
+    }
+  }
+
+  @override
+  Future<void> logout() async {
+    await _dio.post<dynamic>('/auth/logout');
+    await _tokenStorage.clear();
+  }
+
+  @override
+  Future<void> registerWithOtp({
+    required String phoneNumber,
+    required String password,
+    required String otp,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      '/auth/register',
+      data: {'phoneNumber': phoneNumber, 'password': password, 'otp': otp},
+      options: Options(extra: {'skipAuth': true}),
+    );
+
+    final extractedTokens = _extractTokens(response.data);
+    await _tokenStorage.save(extractedTokens);
+  }
+
+  AuthTokens _extractTokens(dynamic data) {
+    final tokens = _tryExtractTokens(data);
+    if (tokens == null) {
+      throw const FormatException(
+        'Auth tokens are missing in response payload.',
+      );
+    }
+    return tokens;
+  }
+
+  AuthTokens? _tryExtractTokens(dynamic data) {
+    if (data is! Map<String, dynamic>) {
+      return null;
+    }
+
+    final payload = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+
+    final accessToken = (payload['accessToken'] ?? payload['access_token'])
+        ?.toString();
+    final refreshToken = (payload['refreshToken'] ?? payload['refresh_token'])
+        ?.toString();
+    final expiresAt = _parseExpiresAt(
+      payload['expiresAt'] ??
+          payload['expires_at'] ??
+          payload['accessTokenExpiresAt'],
+    );
+
+    if (accessToken == null || accessToken.isEmpty) {
+      return null;
+    }
+    if (refreshToken == null || refreshToken.isEmpty) {
+      return null;
+    }
+
+    return AuthTokens(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      expiresAt: expiresAt,
+    );
+  }
+
+  DateTime? _parseExpiresAt(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+}
+
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  final tokenStorage = ref.watch(tokenStorageProvider);
+
+  final dio = ref.watch(apiClientProvider).dio;
+  return ApiAuthRepository(dio: dio, tokenStorage: tokenStorage);
+});

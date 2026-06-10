@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "267922408771",
+    "project_id": "zto-app-demo",
+    "storage_bucket": "zto-app-demo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:267922408771:android:5bb0b19791c94432fd1bf6",
+        "android_client_info": {
+          "package_name": "com.zto.zto_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBcBzmsa9BIFjrWzr7uaESL07UiaiokyVE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
