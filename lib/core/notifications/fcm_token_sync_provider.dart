@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../network/network_providers.dart';
@@ -12,12 +13,14 @@ final fcmTokenSyncProvider = Provider<void>((ref) {
 
   Future<void> syncToken(String token) async {
     if (token.isEmpty || token == lastSyncedToken) {
+      _logFcmSync('Skip sync: empty or already synced');
       return;
     }
 
     final authTokens = await ref.read(tokenStorageProvider).read();
     final accessToken = authTokens?.accessToken;
     if (accessToken == null || accessToken.isEmpty) {
+      _logFcmSync('Skip sync: no access token yet');
       return;
     }
 
@@ -30,10 +33,13 @@ final fcmTokenSyncProvider = Provider<void>((ref) {
         if (statusCode != 404 && statusCode != 405) {
           rethrow;
         }
+        _logFcmSync('PATCH unavailable ($statusCode), fallback to POST');
         await dio.post<dynamic>('/auth/fcm-token', data: {'fcmToken': token});
       }
       lastSyncedToken = token;
-    } catch (_) {
+      _logFcmSync('Synced token=${_previewToken(token)}');
+    } catch (error) {
+      _logFcmSync('Sync failed: $error');
       // Ignore transient failures; next token update or login flow will retry.
     }
   }
@@ -51,4 +57,15 @@ final fcmTokenSyncProvider = Provider<void>((ref) {
   });
 });
 
+String _previewToken(String token) {
+  if (token.length <= 16) {
+    return token;
+  }
+  return '${token.substring(0, 8)}...${token.substring(token.length - 6)}';
+}
 
+void _logFcmSync(String message) {
+  if (kDebugMode) {
+    debugPrint('[FCM_SYNC] $message');
+  }
+}

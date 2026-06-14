@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'current_fcm_token_provider.dart';
@@ -21,8 +22,10 @@ class FirebasePushTokenService implements PushTokenService {
     } catch (_) {
       try {
         await Firebase.initializeApp();
+        _logPushToken('Firebase initialized');
         return true;
-      } catch (_) {
+      } catch (error) {
+        _logPushToken('Firebase init failed: $error');
         return false;
       }
     }
@@ -37,8 +40,11 @@ class FirebasePushTokenService implements PushTokenService {
 
     try {
       await FirebaseMessaging.instance.requestPermission();
-      return await FirebaseMessaging.instance.getToken();
-    } catch (_) {
+      final token = await FirebaseMessaging.instance.getToken();
+      _logPushToken('getToken=${_previewToken(token)}');
+      return token;
+    } catch (error) {
+      _logPushToken('getToken failed: $error');
       return null;
     }
   }
@@ -46,8 +52,14 @@ class FirebasePushTokenService implements PushTokenService {
   @override
   Stream<String> onTokenRefresh() {
     try {
-      return FirebaseMessaging.instance.onTokenRefresh.where((token) => token.isNotEmpty);
-    } catch (_) {
+      return FirebaseMessaging.instance.onTokenRefresh
+          .where((token) => token.isNotEmpty)
+          .map((token) {
+            _logPushToken('onTokenRefresh=${_previewToken(token)}');
+            return token;
+          });
+    } catch (error) {
+      _logPushToken('onTokenRefresh unavailable: $error');
       return const Stream<String>.empty();
     }
   }
@@ -72,3 +84,18 @@ final pushTokenBootstrapProvider = FutureProvider<void>((ref) async {
   ref.onDispose(subscription.cancel);
 });
 
+String _previewToken(String? token) {
+  if (token == null || token.isEmpty) {
+    return '<null>';
+  }
+  if (token.length <= 16) {
+    return token;
+  }
+  return '${token.substring(0, 8)}...${token.substring(token.length - 6)}';
+}
+
+void _logPushToken(String message) {
+  if (kDebugMode) {
+    debugPrint('[FCM_TOKEN] $message');
+  }
+}

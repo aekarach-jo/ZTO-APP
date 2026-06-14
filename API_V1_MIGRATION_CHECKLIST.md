@@ -1,12 +1,12 @@
 # API v1 Migration Checklist
 
-Reference: `http://14.207.141.82:3001/api/v1/docs#/`
+Reference: `http://14.207.141.82/api/v1/docs#/`
 
 > Note: This checklist reflects what is already implemented in the app codebase now.
 
 ## 1) Core configuration and auth
 
-- [x] Set default base URL to `http://14.207.141.82:3001/api/v1`
+- [x] Set default base URL to `http://14.207.141.82/api/v1`
   - File: `lib/core/config/app_env.dart`
 - [x] Remove mock auth toggle (`USE_MOCK_AUTH`) and keep API auth only
   - File: `lib/core/config/app_env.dart`

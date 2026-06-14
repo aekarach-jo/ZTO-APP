@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'core/config/app_env.dart';
+import 'core/notifications/fcm_notification_service.dart';
 import 'core/notifications/fcm_token_sync_provider.dart';
 import 'core/notifications/push_token_service.dart';
 import 'core/router/app_router.dart';
@@ -14,15 +15,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EasyLocalization.ensureInitialized();
   await loadAppEnv();
+  await configureFcmBackgroundHandler();
 
   runApp(
     ProviderScope(
       child: EasyLocalization(
-        supportedLocales: const [
-          Locale('en'),
-          Locale('zh'),
-          Locale('lo'),
-        ],
+        supportedLocales: const [Locale('en'), Locale('zh'), Locale('lo')],
         path: 'assets/translations',
         fallbackLocale: const Locale('en'),
         child: const ZtoApp(),
@@ -38,6 +36,7 @@ class ZtoApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(pushTokenBootstrapProvider);
     ref.watch(fcmTokenSyncProvider);
+    ref.watch(fcmNotificationBootstrapProvider);
     final router = ref.watch(appRouterProvider);
 
     return ScreenUtilInit(
@@ -52,7 +51,8 @@ class ZtoApp extends ConsumerWidget {
           routerConfig: router,
           builder: (context, child) {
             final mediaQuery = MediaQuery.of(context);
-            final isDesktop = !kIsWeb &&
+            final isDesktop =
+                !kIsWeb &&
                 (defaultTargetPlatform == TargetPlatform.macOS ||
                     defaultTargetPlatform == TargetPlatform.windows ||
                     defaultTargetPlatform == TargetPlatform.linux);

@@ -108,18 +108,7 @@ class SendRepository {
       },
     };
 
-    try {
-      await _dio.post<dynamic>('/forwards', data: payload);
-      return;
-    } on DioException {
-      // Backward-compatible fallback for older API routes.
-      try {
-        await _dio.post<dynamic>('/forwarding-requests', data: payload);
-        return;
-      } on DioException {
-        await _dio.post<dynamic>('/parcels/${request.parcelId}/forward', data: payload);
-      }
-    }
+    await _dio.post<dynamic>('/parcels/${request.parcelId}/forward', data: payload);
   }
 
   List<dynamic> _extractList(dynamic data) {
