@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +9,21 @@ import 'package:zto_app/features/notifications/presentation/screens/notification
 
 import '../../test_helpers/mock_asset_loader.dart';
 
-Widget _buildTestApp(Widget child) {
+class _FakeNotificationRepository extends NotificationRepository {
+  _FakeNotificationRepository() : super(dio: Dio());
+
+  final List<String> markedReadIds = [];
+
+  @override
+  Future<void> markAsRead(String id) async {
+    markedReadIds.add(id);
+  }
+}
+
+Widget _buildTestApp(
+  Widget child, {
+  _FakeNotificationRepository? notificationRepository,
+}) {
   return EasyLocalization(
     supportedLocales: const [Locale('en')],
     path: 'unused',
@@ -28,6 +43,10 @@ Widget _buildTestApp(Widget child) {
               localizationsDelegates: context.localizationDelegates,
               home: ProviderScope(
                 overrides: [
+                  if (notificationRepository != null)
+                    notificationRepositoryProvider.overrideWithValue(
+                      notificationRepository,
+                    ),
                   notificationsProvider.overrideWith((ref) async {
                     return const [
                       AppNotification(
@@ -64,10 +83,50 @@ void main() {
     await tester.pumpWidget(_buildTestApp(const NotificationsScreen()));
     await tester.pumpAndSettle();
 
+    expect(find.byType(RefreshIndicator), findsOneWidget);
     expect(find.text('Notifications'), findsOneWidget);
     expect(find.text('2 items'), findsOneWidget);
     expect(find.text('Forwarding completed'), findsOneWidget);
     expect(find.text('Welcome to QuickPick!'), findsOneWidget);
   });
-}
 
+  testWidgets('does not mark notifications as read when the screen loads', (
+    tester,
+  ) async {
+    final repository = _FakeNotificationRepository();
+
+    await tester.pumpWidget(
+      _buildTestApp(
+        const NotificationsScreen(),
+        notificationRepository: repository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.markedReadIds, isEmpty);
+  });
+
+  testWidgets(
+    'marks an unread notification as read only when its item is tapped',
+    (tester) async {
+      final repository = _FakeNotificationRepository();
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          const NotificationsScreen(),
+          notificationRepository: repository,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Welcome to QuickPick!'));
+      await tester.pumpAndSettle();
+      expect(repository.markedReadIds, isEmpty);
+
+      await tester.tap(find.text('Forwarding completed'));
+      await tester.pumpAndSettle();
+
+      expect(repository.markedReadIds, ['n1']);
+    },
+  );
+}

@@ -8,13 +8,34 @@ import 'package:zto_app/features/home/presentation/screens/home_screen.dart';
 
 import '../../test_helpers/mock_asset_loader.dart';
 
-Widget _buildTestApp(Widget child) {
+class _ParcelLocaleAssetLoader extends AssetLoader {
+  const _ParcelLocaleAssetLoader();
+
+  @override
+  Future<Map<String, dynamic>> load(String path, Locale locale) async {
+    final buttonTranslations = switch (locale.languageCode) {
+      'lo' => const {'action_pickup': 'ຮັບເອງ', 'action_forward': 'ສົ່ງຕໍ່'},
+      'zh' => const {'action_pickup': '自取', 'action_forward': '转运'},
+      _ => const {'action_pickup': 'Pickup', 'action_forward': 'Forward'},
+    };
+
+    return {...kTestTranslations, ...buttonTranslations};
+  }
+}
+
+Widget _buildTestApp(
+  Widget child, {
+  List<Locale> supportedLocales = const [Locale('en')],
+  AssetLoader assetLoader = const MockAssetLoader(kTestTranslations),
+  bool showLocaleControls = false,
+}) {
   return EasyLocalization(
-    supportedLocales: const [Locale('en')],
+    supportedLocales: supportedLocales,
     path: 'unused',
     fallbackLocale: const Locale('en'),
     startLocale: const Locale('en'),
-    assetLoader: const MockAssetLoader(kTestTranslations),
+    saveLocale: false,
+    assetLoader: assetLoader,
     child: Builder(
       builder: (context) {
         return ScreenUtilInit(
@@ -49,7 +70,21 @@ Widget _buildTestApp(Widget child) {
                     ];
                   }),
                 ],
-                child: Scaffold(body: child),
+                child: Scaffold(
+                  appBar: showLocaleControls
+                      ? AppBar(
+                          actions: [
+                            for (final locale in supportedLocales)
+                              TextButton(
+                                key: ValueKey('switch-${locale.languageCode}'),
+                                onPressed: () => context.setLocale(locale),
+                                child: Text(locale.languageCode),
+                              ),
+                          ],
+                        )
+                      : null,
+                  body: child,
+                ),
               ),
             );
           },
@@ -66,6 +101,7 @@ void main() {
     await tester.pumpWidget(_buildTestApp(const HomeScreen()));
     await tester.pumpAndSettle();
 
+    expect(find.byType(RefreshIndicator), findsOneWidget);
     expect(find.text('Sony WH-1000XM5 Headphones'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'Phillips');
@@ -80,15 +116,18 @@ void main() {
     expect(find.text('No parcels match your search'), findsOneWidget);
   });
 
-  testWidgets('tapping parcel action shows not implemented snackbar', (tester) async {
+  testWidgets('tapping parcel action shows not implemented snackbar', (
+    tester,
+  ) async {
     await tester.pumpWidget(_buildTestApp(const HomeScreen()));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), 'Phillips');
     await tester.pumpAndSettle();
 
-    final actionButton = find.text('Drop at Service Point');
+    final actionButton = find.text('Pickup');
     expect(actionButton, findsOneWidget);
+    expect(find.text('Forward'), findsOneWidget);
     await tester.ensureVisible(actionButton);
     await tester.pumpAndSettle();
     await tester.tap(actionButton);
@@ -96,6 +135,43 @@ void main() {
 
     expect(find.text('This action is coming soon'), findsOneWidget);
   });
+
+  testWidgets('updates parcel actions when locale changes', (tester) async {
+    await tester.pumpWidget(
+      _buildTestApp(
+        const HomeScreen(),
+        supportedLocales: const [Locale('en'), Locale('lo'), Locale('zh')],
+        assetLoader: const _ParcelLocaleAssetLoader(),
+        showLocaleControls: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pickup'), findsWidgets);
+    expect(find.text('Forward'), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey('switch-lo')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ຮັບເອງ'), findsWidgets);
+    expect(find.text('ສົ່ງຕໍ່'), findsWidgets);
+    expect(find.text('Pickup'), findsNothing);
+    expect(find.text('Forward'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('switch-zh')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('自取'), findsWidgets);
+    expect(find.text('转运'), findsWidgets);
+    expect(find.text('ຮັບເອງ'), findsNothing);
+    expect(find.text('ສົ່ງຕໍ່'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('switch-en')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pickup'), findsWidgets);
+    expect(find.text('Forward'), findsWidgets);
+    expect(find.text('自取'), findsNothing);
+    expect(find.text('转运'), findsNothing);
+  });
 }
-
-

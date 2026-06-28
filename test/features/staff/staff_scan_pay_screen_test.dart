@@ -28,7 +28,9 @@ Widget _buildTestApp(Widget child) {
               localizationsDelegates: context.localizationDelegates,
               home: ProviderScope(
                 overrides: [
-                  handoverReadyParcelsProvider.overrideWith((ref) async => const []),
+                  handoverReadyParcelsProvider.overrideWith(
+                    (ref) async => const [],
+                  ),
                 ],
                 child: Scaffold(body: child),
               ),
@@ -47,6 +49,7 @@ void main() {
     await tester.pumpWidget(_buildTestApp(const StaffScanPayScreen()));
     await tester.pumpAndSettle();
 
+    expect(find.byType(RefreshIndicator), findsOneWidget);
     expect(find.text('Scan parcel delivery'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('scan-pay-request-permission')),

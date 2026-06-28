@@ -29,48 +29,52 @@ class _StaffScanPayScreenState extends ConsumerState<StaffScanPayScreen> {
     return Container(
       key: const ValueKey('staff-scan-pay-screen'),
       color: const Color(0xFFF1F3F7),
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
-        children: [
-          Text(
-            'scan_pay_title'.tr(),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: const Color(0xFF111111),
-              fontSize: 42.sp,
-              fontWeight: FontWeight.w800,
+      child: RefreshIndicator(
+        onRefresh: () => ref.refresh(handoverReadyParcelsProvider.future),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
+          children: [
+            Text(
+              'scan_pay_title'.tr(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: const Color(0xFF111111),
+                fontSize: 42.sp,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
-          SizedBox(height: 2.h),
-          Text(
-            'scan_pay_subtitle'.tr(),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: const Color(0xFF778394),
-              fontSize: 14.sp,
-              fontWeight: FontWeight.w700,
+            SizedBox(height: 2.h),
+            Text(
+              'scan_pay_subtitle'.tr(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: const Color(0xFF778394),
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          SizedBox(height: 14.h),
-          _ScannerCard(
-            isCameraGranted: _isCameraGranted,
-            onRequestPermission: _requestCameraPermission,
-            onScanImage: _scanFromImage,
-            isScanningImage: _isScanningImage,
-          ),
-          SizedBox(height: 14.h),
-          readyItemsAsync.when(
-            data: (items) => _ReadyListCard(
-              items: items,
-              submittingParcelId: _submittingParcelId,
-              onConfirm: _confirmHandover,
+            SizedBox(height: 14.h),
+            _ScannerCard(
+              isCameraGranted: _isCameraGranted,
+              onRequestPermission: _requestCameraPermission,
+              onScanImage: _scanFromImage,
+              isScanningImage: _isScanningImage,
             ),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, __) => _LoadErrorCard(
-              onRetry: () => ref.invalidate(handoverReadyParcelsProvider),
+            SizedBox(height: 14.h),
+            readyItemsAsync.when(
+              data: (items) => _ReadyListCard(
+                items: items,
+                submittingParcelId: _submittingParcelId,
+                onConfirm: _confirmHandover,
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stackTrace) => _LoadErrorCard(
+                onRetry: () => ref.invalidate(handoverReadyParcelsProvider),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -117,7 +121,9 @@ class _StaffScanPayScreenState extends ConsumerState<StaffScanPayScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('staff_scan_pay_handover_confirmed'.tr(args: [item.trackNo])),
+          content: Text(
+            'staff_scan_pay_handover_confirmed'.tr(args: [item.trackNo]),
+          ),
         ),
       );
       ref.invalidate(handoverReadyParcelsProvider);
@@ -126,9 +132,9 @@ class _StaffScanPayScreenState extends ConsumerState<StaffScanPayScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('staff_scan_pay_confirm_failed'.tr())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('staff_scan_pay_confirm_failed'.tr())),
+      );
     } finally {
       if (!mounted) {
         return;
@@ -375,51 +381,51 @@ class _ReadyHandoverTile extends StatelessWidget {
         children: [
           Row(
             children: [
-          Container(
-            width: 36.w,
-            height: 36.w,
-            decoration: const BoxDecoration(
-              color: Color(0xFFE9F3FF),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Text('📦', style: TextStyle(fontSize: 16.sp)),
-          ),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: const Color(0xFF111111),
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w700,
-                  ),
+              Container(
+                width: 36.w,
+                height: 36.w,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE9F3FF),
+                  shape: BoxShape.circle,
                 ),
-                SizedBox(height: 2.h),
-                Text(
-                  item.trackNo,
-                  style: TextStyle(
-                    color: const Color(0xFF8A98AB),
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w700,
-                  ),
+                alignment: Alignment.center,
+                child: Text('📦', style: TextStyle(fontSize: 16.sp)),
+              ),
+              SizedBox(width: 10.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: const Color(0xFF111111),
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 2.h),
+                    Text(
+                      item.trackNo,
+                      style: TextStyle(
+                        color: const Color(0xFF8A98AB),
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          Text(
-            item.dateLabel,
-            style: TextStyle(
-              color: const Color(0xFF9EACBE),
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+              ),
+              Text(
+                item.dateLabel,
+                style: TextStyle(
+                  color: const Color(0xFF9EACBE),
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
           SizedBox(height: 10.h),
@@ -435,7 +441,9 @@ class _ReadyHandoverTile extends StatelessWidget {
                 ),
               ),
               child: Text(
-                isSubmitting ? 'common_loading'.tr() : 'staff_scan_pay_confirm_handover'.tr(),
+                isSubmitting
+                    ? 'common_loading'.tr()
+                    : 'staff_scan_pay_confirm_handover'.tr(),
               ),
             ),
           ),

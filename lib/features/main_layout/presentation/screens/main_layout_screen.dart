@@ -32,7 +32,7 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
   int _customerTabIndex = 0;
   int _staffTabIndex = 0;
 
-  final List<Widget> _customerTabs = const [
+  List<Widget> get _customerTabs => [
     HomeScreen(),
     SendScreen(),
     NotificationsScreen(),
@@ -40,7 +40,7 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
     ContactScreen(),
   ];
 
-  final List<Widget> _staffTabs = const [
+  List<Widget> get _staffTabs => [
     StaffReceiveScreen(),
     StaffScanPayScreen(),
     _PlaceholderTab(titleKey: 'tab_customer_chat'),
@@ -63,34 +63,18 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
     );
   }
 
-  Future<void> _handleSwitchLanguage() async {
-    final supportedLocales = context.supportedLocales;
-    if (supportedLocales.isEmpty) {
-      return;
-    }
-
-    final currentLocale = context.locale;
-    final currentIndex = supportedLocales.indexWhere(
-      (locale) =>
-          locale.languageCode == currentLocale.languageCode &&
-          locale.countryCode == currentLocale.countryCode,
-    );
-    final nextIndex = currentIndex == -1
-        ? 0
-        : (currentIndex + 1) % supportedLocales.length;
-    await context.setLocale(supportedLocales[nextIndex]);
-  }
-
   @override
   Widget build(BuildContext context) {
     final role = ref.watch(authProvider).role;
     final isCustomer = role == UserRole.customer;
     final requestedCustomerTab = ref.watch(customerTabJumpTargetProvider);
     final notificationBadgeCount = isCustomer
-        ? ref.watch(notificationsProvider).maybeWhen(
-            data: (items) => items.length,
-            orElse: () => 0,
-          )
+        ? ref
+              .watch(notificationsProvider)
+              .maybeWhen(
+                data: (items) => items.where((item) => item.isUnread).length,
+                orElse: () => 0,
+              )
         : 0;
 
     if (isCustomer && requestedCustomerTab != null) {
@@ -113,8 +97,8 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
         children: [
           _MainTopBar(
             isCustomer: isCustomer,
+            currentLocale: context.locale,
             onSwitchRole: () => ref.read(authProvider.notifier).switchRole(),
-            onSwitchLanguage: () => unawaited(_handleSwitchLanguage()),
             onLogout: () => unawaited(_handleLogout()),
           ),
           Expanded(
@@ -137,6 +121,8 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
         backgroundColor: Colors.white,
         currentIndex: _customerTabIndex,
         onTap: (index) => setState(() => _customerTabIndex = index),
+        showSelectedLabels: false,
+        showUnselectedLabels: false,
         selectedItemColor: AppTheme.primaryOrange,
         unselectedItemColor: const Color(0xFF778394),
         selectedLabelStyle: const TextStyle(
@@ -148,24 +134,16 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
           fontSize: 11,
         ),
         items: [
-          BottomNavigationBarItem(
+          _buildNavBarItem(
             icon: const Text('📦', style: TextStyle(fontSize: 20)),
-            activeIcon: const Text('📦', style: TextStyle(fontSize: 20)),
             label: 'tab_parcel'.tr(),
           ),
-          BottomNavigationBarItem(
+          _buildNavBarItem(
             icon: const Text('🚚', style: TextStyle(fontSize: 20)),
-            activeIcon: const Text('🚚', style: TextStyle(fontSize: 20)),
             label: 'tab_send_parcel'.tr(),
           ),
-          BottomNavigationBarItem(
+          _buildNavBarItem(
             icon: notificationBadgeCount > 0
-                ? Badge(
-                    label: Text(notificationBadgeCount.toString()),
-                    child: const Text('🔔', style: TextStyle(fontSize: 20)),
-                  )
-                : const Text('🔔', style: TextStyle(fontSize: 20)),
-            activeIcon: notificationBadgeCount > 0
                 ? Badge(
                     label: Text(notificationBadgeCount.toString()),
                     child: const Text('🔔', style: TextStyle(fontSize: 20)),
@@ -173,14 +151,12 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
                 : const Text('🔔', style: TextStyle(fontSize: 20)),
             label: 'tab_notifications'.tr(),
           ),
-          BottomNavigationBarItem(
+          _buildNavBarItem(
             icon: const Text('👤', style: TextStyle(fontSize: 20)),
-            activeIcon: const Text('👤', style: TextStyle(fontSize: 20)),
             label: 'tab_profile'.tr(),
           ),
-          BottomNavigationBarItem(
+          _buildNavBarItem(
             icon: const Text('💬', style: TextStyle(fontSize: 20)),
-            activeIcon: const Text('💬', style: TextStyle(fontSize: 20)),
             label: 'tab_contact'.tr(),
           ),
         ],
@@ -196,6 +172,8 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
         backgroundColor: Colors.white,
         currentIndex: _staffTabIndex,
         onTap: (index) => setState(() => _staffTabIndex = index),
+        showSelectedLabels: false,
+        showUnselectedLabels: false,
         selectedItemColor: AppTheme.primaryOrange,
         unselectedItemColor: const Color(0xFF778394),
         selectedLabelStyle: const TextStyle(
@@ -207,23 +185,78 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
           fontSize: 11,
         ),
         items: [
-          BottomNavigationBarItem(
+          _buildNavBarItem(
             icon: const Text('📋', style: TextStyle(fontSize: 20)),
-            activeIcon: const Text('📋', style: TextStyle(fontSize: 20)),
             label: 'tab_receive'.tr(),
           ),
-          BottomNavigationBarItem(
+          _buildNavBarItem(
             icon: const Text('🏪', style: TextStyle(fontSize: 20)),
-            activeIcon: const Text('🏪', style: TextStyle(fontSize: 20)),
             label: 'tab_scan_pay'.tr(),
           ),
-          BottomNavigationBarItem(
+          _buildNavBarItem(
             icon: const Text('💬', style: TextStyle(fontSize: 20)),
-            activeIcon: const Text('💬', style: TextStyle(fontSize: 20)),
             label: 'tab_customer_chat'.tr(),
           ),
         ],
       ),
+    );
+  }
+
+  BottomNavigationBarItem _buildNavBarItem({
+    required Widget icon,
+    required String label,
+  }) {
+    return BottomNavigationBarItem(
+      icon: _BottomNavItemContent(icon: icon, label: label, isSelected: false),
+      activeIcon: _BottomNavItemContent(
+        icon: icon,
+        label: label,
+        isSelected: true,
+      ),
+      label: '',
+      tooltip: label,
+    );
+  }
+}
+
+class _BottomNavItemContent extends StatelessWidget {
+  const _BottomNavItemContent({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
+  });
+
+  final Widget icon;
+  final String label;
+  final bool isSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isSelected ? AppTheme.primaryOrange : const Color(0xFF778394);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        icon,
+        SizedBox(height: 3.h),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 2.w),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
+              style: TextStyle(
+                color: color,
+                fontSize: 11.sp,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -231,14 +264,14 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
 class _MainTopBar extends StatelessWidget {
   const _MainTopBar({
     required this.isCustomer,
+    required this.currentLocale,
     required this.onSwitchRole,
-    required this.onSwitchLanguage,
     required this.onLogout,
   });
 
   final bool isCustomer;
+  final Locale currentLocale;
   final VoidCallback onSwitchRole;
-  final VoidCallback onSwitchLanguage;
   final VoidCallback onLogout;
 
   @override
@@ -320,10 +353,6 @@ class _MainTopBar extends StatelessWidget {
                     onSwitchRole();
                     return;
                   }
-                  if (action == _TopBarMenuAction.switchLanguage) {
-                    onSwitchLanguage();
-                    return;
-                  }
                   onLogout();
                 },
                 itemBuilder: (context) => [
@@ -332,15 +361,37 @@ class _MainTopBar extends StatelessWidget {
                     value: _TopBarMenuAction.switchRole,
                     child: Text(
                       (isCustomer
-                              ? 'switch_to_staff'.tr()
+                              ? 'switch_branch'.tr()
                               : 'switch_to_customer'.tr())
                           .toUpperCase(),
                     ),
                   ),
                   PopupMenuItem<_TopBarMenuAction>(
                     key: const ValueKey('topbar-menu-switch-language'),
-                    value: _TopBarMenuAction.switchLanguage,
-                    child: Text('switch_language'.tr().toUpperCase()),
+                    enabled: false,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _LanguageFlagButton(
+                          locale: Locale('en'),
+                          flag: '🇬🇧',
+                          tooltipKey: 'language_english',
+                          selected: currentLocale.languageCode == 'en',
+                        ),
+                        _LanguageFlagButton(
+                          locale: Locale('lo'),
+                          flag: '🇱🇦',
+                          tooltipKey: 'language_lao',
+                          selected: currentLocale.languageCode == 'lo',
+                        ),
+                        _LanguageFlagButton(
+                          locale: Locale('zh'),
+                          flag: '🇨🇳',
+                          tooltipKey: 'language_chinese',
+                          selected: currentLocale.languageCode == 'zh',
+                        ),
+                      ],
+                    ),
                   ),
                   PopupMenuItem<_TopBarMenuAction>(
                     key: const ValueKey('topbar-menu-logout'),
@@ -360,7 +411,36 @@ class _MainTopBar extends StatelessWidget {
   }
 }
 
-enum _TopBarMenuAction { switchRole, switchLanguage, logout }
+class _LanguageFlagButton extends StatelessWidget {
+  const _LanguageFlagButton({
+    required this.locale,
+    required this.flag,
+    required this.tooltipKey,
+    required this.selected,
+  });
+
+  final Locale locale;
+  final String flag;
+  final String tooltipKey;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      key: ValueKey('topbar-language-${locale.languageCode}'),
+      tooltip: tooltipKey.tr(),
+      isSelected: selected,
+      selectedIcon: Text(flag, style: const TextStyle(fontSize: 24)),
+      onPressed: () {
+        unawaited(context.setLocale(locale));
+        Navigator.of(context).pop();
+      },
+      icon: Text(flag, style: const TextStyle(fontSize: 24)),
+    );
+  }
+}
+
+enum _TopBarMenuAction { switchRole, logout }
 
 class _PlaceholderTab extends StatelessWidget {
   const _PlaceholderTab({required this.titleKey});

@@ -9,29 +9,30 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../shared/widgets/language_toggle_button.dart';
 import '../../../../shared/widgets/primary_button.dart';
-import '../../../main_layout/presentation/screens/main_layout_screen.dart';
 import '../../application/auth_provider.dart';
-import 'register_screen.dart';
+import 'forgot_password_screen.dart';
+import 'reset_password_screen.dart';
 
-class RegisterOtpArgs {
-  const RegisterOtpArgs({required this.phoneNumber, required this.password});
+class ForgotPasswordOtpArgs {
+  const ForgotPasswordOtpArgs({required this.phoneNumber});
 
   final String phoneNumber;
-  final String password;
 }
 
-class RegisterOtpScreen extends ConsumerStatefulWidget {
-  const RegisterOtpScreen({required this.args, super.key});
+class ForgotPasswordOtpScreen extends ConsumerStatefulWidget {
+  const ForgotPasswordOtpScreen({required this.args, super.key});
 
-  static const String routePath = '/register/otp';
+  static const String routePath = '/forgot-password/otp';
 
-  final RegisterOtpArgs args;
+  final ForgotPasswordOtpArgs args;
 
   @override
-  ConsumerState<RegisterOtpScreen> createState() => _RegisterOtpScreenState();
+  ConsumerState<ForgotPasswordOtpScreen> createState() =>
+      _ForgotPasswordOtpScreenState();
 }
 
-class _RegisterOtpScreenState extends ConsumerState<RegisterOtpScreen> {
+class _ForgotPasswordOtpScreenState
+    extends ConsumerState<ForgotPasswordOtpScreen> {
   static const int _otpLength = 6;
   static const int _otpExpirySeconds = 300;
 
@@ -66,18 +67,12 @@ class _RegisterOtpScreenState extends ConsumerState<RegisterOtpScreen> {
         timer.cancel();
         return;
       }
-
       if (_remainingSeconds <= 1) {
-        setState(() {
-          _remainingSeconds = 0;
-        });
+        setState(() => _remainingSeconds = 0);
         timer.cancel();
         return;
       }
-
-      setState(() {
-        _remainingSeconds -= 1;
-      });
+      setState(() => _remainingSeconds -= 1);
     });
   }
 
@@ -92,17 +87,15 @@ class _RegisterOtpScreenState extends ConsumerState<RegisterOtpScreen> {
       _showSnackBar('otp_expired');
       return;
     }
-
     if (!_isOtpComplete) {
       _showSnackBar('invalid_otp_code');
       return;
     }
 
-    final success = await ref
+    final resetToken = await ref
         .read(authProvider.notifier)
-        .register(
+        .verifyForgotPasswordOtp(
           phoneNumber: widget.args.phoneNumber,
-          password: widget.args.password,
           otp: _otp,
         );
 
@@ -110,28 +103,34 @@ class _RegisterOtpScreenState extends ConsumerState<RegisterOtpScreen> {
       return;
     }
 
-    final messageKey = ref.read(authProvider).message;
-    if (messageKey != null) {
-      _showSnackBar(messageKey);
+    final message = ref.read(authProvider).message;
+    if (message != null) {
+      _showSnackBar(message);
     }
 
-    if (success) {
-      context.go(MainLayoutScreen.routePath);
+    if (resetToken != null && resetToken.isNotEmpty) {
+      context.go(
+        ResetPasswordScreen.routePath,
+        extra: ResetPasswordArgs(
+          phoneNumber: widget.args.phoneNumber,
+          resetToken: resetToken,
+        ),
+      );
     }
   }
 
   Future<void> _resendOtp() async {
     final success = await ref
         .read(authProvider.notifier)
-        .requestRegisterOtp(phoneNumber: widget.args.phoneNumber);
+        .requestForgotPasswordOtp(phoneNumber: widget.args.phoneNumber);
 
     if (!mounted) {
       return;
     }
 
-    final messageKey = ref.read(authProvider).message;
-    if (messageKey != null) {
-      _showSnackBar(messageKey);
+    final message = ref.read(authProvider).message;
+    if (message != null) {
+      _showSnackBar(message);
     }
 
     if (success) {
@@ -150,17 +149,22 @@ class _RegisterOtpScreenState extends ConsumerState<RegisterOtpScreen> {
     if (raw.length <= 6) {
       return hasPlus ? '+$raw' : raw;
     }
-
     final prefix = raw.substring(0, 3);
     final suffix = raw.substring(raw.length - 3);
     final masked = '*' * (raw.length - 6);
     return hasPlus ? '+$prefix$masked$suffix' : '$prefix$masked$suffix';
   }
 
-  void _showSnackBar(String messageKey) {
+  void _showSnackBar(String messageKeyOrText) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(messageKey.tr())));
+    ).showSnackBar(SnackBar(content: Text(_messageText(messageKeyOrText))));
+  }
+
+  String _messageText(String messageKeyOrText) {
+    return messageKeyOrText.contains('_')
+        ? messageKeyOrText.tr()
+        : messageKeyOrText;
   }
 
   @override
@@ -191,8 +195,9 @@ class _RegisterOtpScreenState extends ConsumerState<RegisterOtpScreen> {
                   Row(
                     children: [
                       IconButton(
-                        key: const ValueKey('otp-back-to-register-button'),
-                        onPressed: () => context.go(RegisterScreen.routePath),
+                        key: const ValueKey('forgot-password-otp-back-button'),
+                        onPressed: () =>
+                            context.go(ForgotPasswordScreen.routePath),
                         icon: const Icon(Icons.arrow_back_rounded),
                         tooltip: MaterialLocalizations.of(
                           context,
@@ -280,7 +285,9 @@ class _RegisterOtpScreenState extends ConsumerState<RegisterOtpScreen> {
                                   ? _otp[index]
                                   : '';
                               return Container(
-                                key: ValueKey('otp-digit-box-$index'),
+                                key: ValueKey(
+                                  'forgot-password-otp-digit-box-$index',
+                                ),
                                 width: 48.w,
                                 height: 52.h,
                                 alignment: Alignment.center,
@@ -304,7 +311,9 @@ class _RegisterOtpScreenState extends ConsumerState<RegisterOtpScreen> {
                         Opacity(
                           opacity: 0,
                           child: TextField(
-                            key: const ValueKey('otp-hidden-input'),
+                            key: const ValueKey(
+                              'forgot-password-otp-hidden-input',
+                            ),
                             controller: _otpInputController,
                             focusNode: _otpFocusNode,
                             keyboardType: TextInputType.number,
@@ -313,9 +322,7 @@ class _RegisterOtpScreenState extends ConsumerState<RegisterOtpScreen> {
                               LengthLimitingTextInputFormatter(_otpLength),
                             ],
                             onChanged: (value) {
-                              setState(() {
-                                _otp = value;
-                              });
+                              setState(() => _otp = value);
                               if (value.length == _otpLength && !_isExpired) {
                                 unawaited(_submitOtp());
                               }
@@ -333,7 +340,7 @@ class _RegisterOtpScreenState extends ConsumerState<RegisterOtpScreen> {
                         ),
                         SizedBox(height: 6.h),
                         PrimaryButton(
-                          label: 'register'.tr(),
+                          label: 'continue'.tr(),
                           onPressed: _isExpired || authState.isLoading
                               ? null
                               : _submitOtp,

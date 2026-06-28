@@ -2,93 +2,87 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../shared/widgets/custom_text_field.dart';
 import '../../../../shared/widgets/language_toggle_button.dart';
 import '../../../../shared/widgets/primary_button.dart';
-import 'forgot_password_screen.dart';
-import 'register_screen.dart';
-import '../../../main_layout/presentation/screens/main_layout_screen.dart';
 import '../../application/auth_provider.dart';
+import 'forgot_password_screen.dart';
+import 'login_screen.dart';
 
-class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+class ResetPasswordArgs {
+  const ResetPasswordArgs({
+    required this.phoneNumber,
+    required this.resetToken,
+  });
 
-  static const String routePath = '/login';
-
-  @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  final String phoneNumber;
+  final String resetToken;
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class ResetPasswordScreen extends ConsumerStatefulWidget {
+  const ResetPasswordScreen({required this.args, super.key});
+
+  static const String routePath = '/forgot-password/reset';
+
+  final ResetPasswordArgs args;
+
+  @override
+  ConsumerState<ResetPasswordScreen> createState() =>
+      _ResetPasswordScreenState();
+}
+
+class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _phoneController = TextEditingController();
-  final _passwordController = TextEditingController();
-  static final RegExp _laosLocalPhoneRegex = RegExp(r'^20[0-9]{6,8}$');
-
-  String _normalizeLaosPhone(String input) {
-    var digitsOnly = input.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digitsOnly.isEmpty) {
-      return '';
-    }
-
-    if (digitsOnly.startsWith('856')) {
-      digitsOnly = digitsOnly.substring(3);
-    }
-    if (digitsOnly.startsWith('0')) {
-      digitsOnly = digitsOnly.substring(1);
-    }
-
-    return '+856$digitsOnly';
-  }
-
-  String _sanitizeLocalMobile(String input) {
-    var digitsOnly = input.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digitsOnly.startsWith('856')) {
-      digitsOnly = digitsOnly.substring(3);
-    }
-    if (digitsOnly.startsWith('0')) {
-      digitsOnly = digitsOnly.substring(1);
-    }
-    return digitsOnly;
-  }
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   @override
   void dispose() {
-    _phoneController.dispose();
-    _passwordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
+  Future<void> _handleResetPassword() async {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) {
       return;
     }
 
-    final notifier = ref.read(authProvider.notifier);
-    final phoneNumber = _normalizeLaosPhone(_phoneController.text.trim());
-    final success = await notifier.login(
-      phoneNumber: phoneNumber,
-      password: _passwordController.text.trim(),
-    );
+    final success = await ref
+        .read(authProvider.notifier)
+        .resetForgotPassword(
+          phoneNumber: widget.args.phoneNumber,
+          resetToken: widget.args.resetToken,
+          newPassword: _newPasswordController.text.trim(),
+        );
 
     if (!mounted) {
       return;
     }
 
-    if (success) {
-      context.go(MainLayoutScreen.routePath);
-    } else {
-      final messageKey = ref.read(authProvider).message;
-      if (messageKey != null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(messageKey.tr())));
-      }
+    final message = ref.read(authProvider).message;
+    if (message != null) {
+      _showSnackBar(message);
     }
+
+    if (success) {
+      context.go(LoginScreen.routePath);
+    }
+  }
+
+  void _showSnackBar(String messageKeyOrText) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_messageText(messageKeyOrText))));
+  }
+
+  String _messageText(String messageKeyOrText) {
+    return messageKeyOrText.contains('_')
+        ? messageKeyOrText.tr()
+        : messageKeyOrText;
   }
 
   @override
@@ -120,6 +114,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   children: [
                     Row(
                       children: [
+                        IconButton(
+                          onPressed: () =>
+                              context.go(ForgotPasswordScreen.routePath),
+                          icon: const Icon(Icons.arrow_back_rounded),
+                          tooltip: MaterialLocalizations.of(
+                            context,
+                          ).backButtonTooltip,
+                        ),
+                        SizedBox(width: 4.w),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -147,7 +150,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const LanguageToggleButton(),
                       ],
                     ),
-                    SizedBox(height: 20.h),
+                    SizedBox(height: 16.h),
                     Container(
                       width: double.infinity,
                       padding: EdgeInsets.all(20.w),
@@ -167,7 +170,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'welcome_back'.tr(),
+                            'reset_password_title'.tr(),
                             style: Theme.of(context).textTheme.headlineMedium
                                 ?.copyWith(
                                   fontSize: 30.sp,
@@ -176,7 +179,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           SizedBox(height: 4.h),
                           Text(
-                            'login_continue_subtitle'.tr(),
+                            'reset_password_subtitle'.tr(),
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   color: const Color(0xFF7A869A),
@@ -185,58 +188,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           SizedBox(height: 22.h),
                           CustomTextField(
-                            label: 'phone_number'.tr(),
-                            hintText: 'phone_local_hint'.tr(),
-                            prefixText: '+856 ',
-                            keyboardType: TextInputType.phone,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(r'[0-9 ]'),
-                              ),
-                              LengthLimitingTextInputFormatter(11),
-                            ],
-                            controller: _phoneController,
+                            label: 'new_password'.tr(),
+                            controller: _newPasswordController,
+                            obscureText: true,
                             validator: (value) {
-                              final local = _sanitizeLocalMobile(
-                                value?.trim() ?? '',
-                              );
-                              if (local.isEmpty) {
+                              final password = value?.trim() ?? '';
+                              if (password.isEmpty) {
                                 return 'required_field'.tr();
                               }
-                              if (!_laosLocalPhoneRegex.hasMatch(local)) {
-                                return 'invalid_phone_number'.tr();
+                              if (password.length < 8) {
+                                return 'password_too_short'.tr();
                               }
                               return null;
                             },
                           ),
                           SizedBox(height: 14.h),
                           CustomTextField(
-                            label: 'password'.tr(),
-                            controller: _passwordController,
+                            label: 'confirm_password'.tr(),
+                            controller: _confirmPasswordController,
                             obscureText: true,
                             validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
+                              final confirmation = value?.trim() ?? '';
+                              if (confirmation.isEmpty) {
                                 return 'required_field'.tr();
+                              }
+                              if (confirmation !=
+                                  _newPasswordController.text.trim()) {
+                                return 'password_not_match'.tr();
                               }
                               return null;
                             },
                           ),
-                          SizedBox(height: 6.h),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: authState.isLoading
-                                  ? null
-                                  : () => context.push(
-                                      ForgotPasswordScreen.routePath,
-                                    ),
-                              child: Text('forgot_password'.tr()),
-                            ),
-                          ),
-                          SizedBox(height: 12.h),
+                          SizedBox(height: 24.h),
                           PrimaryButton(
-                            label: 'login'.tr(),
-                            onPressed: _handleLogin,
+                            label: 'reset_password'.tr(),
+                            onPressed: authState.isLoading
+                                ? null
+                                : _handleResetPassword,
                             isLoading: authState.isLoading,
                           ),
                           SizedBox(height: 10.h),
@@ -244,9 +232,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: TextButton(
                               onPressed: authState.isLoading
                                   ? null
-                                  : () =>
-                                        context.push(RegisterScreen.routePath),
-                              child: Text('dont_have_account'.tr()),
+                                  : () => context.go(LoginScreen.routePath),
+                              child: Text('back_to_login'.tr()),
                             ),
                           ),
                         ],

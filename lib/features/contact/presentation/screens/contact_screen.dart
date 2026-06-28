@@ -34,49 +34,60 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
       child: Column(
         children: [
           Expanded(
-            child: ListView(
-              controller: _scrollController,
-              padding: EdgeInsets.fromLTRB(16.w, 18.h, 16.w, 16.h),
-              children: [
-                Text(
-                  'contact_title'.tr(),
-                  style: TextStyle(
-                    color: const Color(0xFF111111),
-                    fontSize: 46.sp,
-                    fontWeight: FontWeight.w800,
+            child: RefreshIndicator(
+              onRefresh: () => ref.refresh(contactThreadProvider.future),
+              child: ListView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(16.w, 18.h, 16.w, 16.h),
+                children: [
+                  Text(
+                    'contact_title'.tr(),
+                    style: TextStyle(
+                      color: const Color(0xFF111111),
+                      fontSize: 46.sp,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                SizedBox(height: 14.h),
-                threadAsync.when(
-                  data: (messages) {
-                    final effectiveMessages = messages.isEmpty
-                        ? [
-                            ContactMessage(
-                              id: 'welcome',
-                              role: ContactMessageRole.agent,
-                              text: 'contact_welcome_message'.tr(),
-                              createdAt: DateTime.now(),
-                            ),
-                          ]
-                        : messages;
+                  SizedBox(height: 14.h),
+                  threadAsync.when(
+                    data: (messages) {
+                      final effectiveMessages = messages.isEmpty
+                          ? [
+                              ContactMessage(
+                                id: 'welcome',
+                                role: ContactMessageRole.agent,
+                                text: 'contact_welcome_message'.tr(),
+                                createdAt: DateTime.now(),
+                              ),
+                            ]
+                          : messages;
 
-                    return Column(
-                      children: [
-                        for (var i = 0; i < effectiveMessages.length; i++) ...[
-                          _ChatBubble(
-                            key: ValueKey('contact-bubble-$i'),
-                            message: effectiveMessages[i],
-                          ),
-                          SizedBox(height: 10.h),
+                      return Column(
+                        children: [
+                          for (
+                            var i = 0;
+                            i < effectiveMessages.length;
+                            i++
+                          ) ...[
+                            _ChatBubble(
+                              key: ValueKey('contact-bubble-$i'),
+                              message: effectiveMessages[i],
+                            ),
+                            SizedBox(height: 10.h),
+                          ],
                         ],
-                      ],
-                    );
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (_, __) => _ErrorCard(onRetry: () => ref.invalidate(contactThreadProvider)),
-                ),
-                SizedBox(height: 80.h),
-              ],
+                      );
+                    },
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (error, stackTrace) => _ErrorCard(
+                      onRetry: () => ref.invalidate(contactThreadProvider),
+                    ),
+                  ),
+                  SizedBox(height: 80.h),
+                ],
+              ),
             ),
           ),
           SafeArea(
@@ -149,38 +160,43 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
     });
     _messageController.clear();
 
-    ref.read(contactThreadProvider.notifier).sendMessage(text).then((_) {
-      if (!mounted) {
-        return;
-      }
-      _scrollToBottom();
-    }).catchError((error) {
-      if (!mounted) {
-        return;
-      }
-      if (_messageController.text.trim().isEmpty) {
-        _messageController.text = text;
-        _messageController.selection = TextSelection.collapsed(
-          offset: _messageController.text.length,
-        );
-      }
+    ref
+        .read(contactThreadProvider.notifier)
+        .sendMessage(text)
+        .then((_) {
+          if (!mounted) {
+            return;
+          }
+          _scrollToBottom();
+        })
+        .catchError((error) {
+          if (!mounted) {
+            return;
+          }
+          if (_messageController.text.trim().isEmpty) {
+            _messageController.text = text;
+            _messageController.selection = TextSelection.collapsed(
+              offset: _messageController.text.length,
+            );
+          }
 
-      final fallback = 'contact_send_failed'.tr();
-      final details = error is ContactSendException ? error.message : '';
-      if (kDebugMode) {
-        debugPrint('[ContactScreen] Send failed error=$error');
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(details.isNotEmpty ? details : fallback)),
-      );
-    }).whenComplete(() {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isSending = false;
-      });
-    });
+          final fallback = 'contact_send_failed'.tr();
+          final details = error is ContactSendException ? error.message : '';
+          if (kDebugMode) {
+            debugPrint('[ContactScreen] Send failed error=$error');
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(details.isNotEmpty ? details : fallback)),
+          );
+        })
+        .whenComplete(() {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _isSending = false;
+          });
+        });
   }
 
   void _scrollToBottom() {
@@ -268,4 +284,3 @@ class _ErrorCard extends StatelessWidget {
     );
   }
 }
-

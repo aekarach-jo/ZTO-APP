@@ -27,112 +27,118 @@ class _StaffReceiveScreenState extends ConsumerState<StaffReceiveScreen> {
     final itemsAsync = ref.watch(staffParcelsProvider);
     final query = _searchController.text.trim().toLowerCase();
 
-    return ListView(
-      padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'receive_incoming_parcels'.tr(),
-                style: TextStyle(
-                  fontSize: 26.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF111111),
-                ),
-              ),
-            ),
-            Container(
-              width: 34.w,
-              height: 34.w,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFCE9D3),
-                border: Border.all(color: const Color(0xFFF3CCA5)),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(staffParcelsProvider.future),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
+        children: [
+          Row(
+            children: [
+              Expanded(
                 child: Text(
-                  '?',
+                  'receive_incoming_parcels'.tr(),
                   style: TextStyle(
-                    color: const Color(0xFFE6852A),
-                    fontSize: 16.sp,
+                    fontSize: 26.sp,
                     fontWeight: FontWeight.w800,
+                    color: const Color(0xFF111111),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-        SizedBox(height: 4.h),
-        Text(
-          'step_scan_box'.tr(),
-          style: TextStyle(
-            fontSize: 14.sp,
-            color: const Color(0xFF778394),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        SizedBox(height: 12.h),
-        Row(
-          children: [
-            Expanded(
-              child: _SearchBar(
-                controller: _searchController,
-                hint: 'search_receive_parcel'.tr(),
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            SizedBox(width: 10.w),
-            Container(
-              height: 46.h,
-              padding: EdgeInsets.symmetric(horizontal: 16.w),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(14.r),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.flash_on,
-                    color: const Color(0xFFFFD433),
-                    size: 16.sp,
-                  ),
-                  SizedBox(width: 4.w),
-                  Text(
-                    'new_tag'.tr(),
+              Container(
+                width: 34.w,
+                height: 34.w,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFCE9D3),
+                  border: Border.all(color: const Color(0xFFF3CCA5)),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    '?',
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFFE6852A),
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
-        SizedBox(height: 14.h),
-        itemsAsync.when(
-          data: (items) {
-            final filteredItems = items.where((item) => item.matches(query)).toList();
-            if (filteredItems.isEmpty) {
-              return const _EmptyState(message: 'no_receive_found');
-            }
-            return _StaffParcelCard(
-              item: filteredItems.first,
-              isSubmitting: _isSubmitting,
-              onConfirm: () => _confirmInspected(filteredItems.first.id),
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, __) => _EmptyState(
-            message: 'staff_receive_load_error',
-            actionLabel: 'common_retry',
-            onAction: () => ref.invalidate(staffParcelsProvider),
+            ],
           ),
-        ),
-      ],
+          SizedBox(height: 4.h),
+          Text(
+            'step_scan_box'.tr(),
+            style: TextStyle(
+              fontSize: 14.sp,
+              color: const Color(0xFF778394),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 12.h),
+          Row(
+            children: [
+              Expanded(
+                child: _SearchBar(
+                  controller: _searchController,
+                  hint: 'search_receive_parcel'.tr(),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              SizedBox(width: 10.w),
+              Container(
+                height: 46.h,
+                padding: EdgeInsets.symmetric(horizontal: 16.w),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(14.r),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.flash_on,
+                      color: const Color(0xFFFFD433),
+                      size: 16.sp,
+                    ),
+                    SizedBox(width: 4.w),
+                    Text(
+                      'new_tag'.tr(),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 14.h),
+          itemsAsync.when(
+            data: (items) {
+              final filteredItems = items
+                  .where((item) => item.matches(query))
+                  .toList();
+              if (filteredItems.isEmpty) {
+                return const _EmptyState(message: 'no_receive_found');
+              }
+              return _StaffParcelCard(
+                item: filteredItems.first,
+                isSubmitting: _isSubmitting,
+                onConfirm: () => _confirmInspected(filteredItems.first.id),
+              );
+            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, stackTrace) => _EmptyState(
+              message: 'staff_receive_load_error',
+              actionLabel: 'common_retry',
+              onAction: () => ref.invalidate(staffParcelsProvider),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -145,17 +151,17 @@ class _StaffReceiveScreenState extends ConsumerState<StaffReceiveScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('staff_receive_marked_inspected'.tr())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('staff_receive_marked_inspected'.tr())),
+      );
       ref.invalidate(staffParcelsProvider);
     } catch (_) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('staff_receive_update_failed'.tr())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('staff_receive_update_failed'.tr())),
+      );
     } finally {
       if (!mounted) {
         return;
@@ -229,7 +235,11 @@ class _StaffParcelCard extends StatelessWidget {
           SizedBox(height: 10.h),
           Row(
             children: [
-              const Icon(Icons.scale_outlined, size: 16, color: Color(0xFF96A3B5)),
+              const Icon(
+                Icons.scale_outlined,
+                size: 16,
+                color: Color(0xFF96A3B5),
+              ),
               SizedBox(width: 4.w),
               Text(
                 item.weightLabel,
@@ -269,7 +279,9 @@ class _StaffParcelCard extends StatelessWidget {
                   fontSize: 16.sp,
                 ),
               ),
-              child: Text(isSubmitting ? '...' : 'action_confirm_inspected'.tr()),
+              child: Text(
+                isSubmitting ? '...' : 'action_confirm_inspected'.tr(),
+              ),
             ),
           ),
         ],
@@ -367,7 +379,11 @@ class _EmptyState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(Icons.fact_check_outlined, color: const Color(0xFFA2AFBF), size: 24.sp),
+          Icon(
+            Icons.fact_check_outlined,
+            color: const Color(0xFFA2AFBF),
+            size: 24.sp,
+          ),
           SizedBox(height: 8.h),
           Text(
             message.tr(),
@@ -387,4 +403,3 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
-

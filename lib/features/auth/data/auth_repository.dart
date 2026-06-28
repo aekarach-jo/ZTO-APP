@@ -8,6 +8,19 @@ import '../../../core/network/storage/token_storage.dart';
 abstract class AuthRepository {
   Future<void> requestOtpForRegister({required String phoneNumber});
 
+  Future<void> sendForgotPasswordOtp({required String phoneNumber});
+
+  Future<String> verifyForgotPasswordOtp({
+    required String phoneNumber,
+    required String otp,
+  });
+
+  Future<void> resetPassword({
+    required String phoneNumber,
+    required String resetToken,
+    required String newPassword,
+  });
+
   Future<void> loginWithPassword({
     required String phoneNumber,
     required String password,
@@ -24,7 +37,6 @@ abstract class AuthRepository {
   });
 }
 
-
 class ApiAuthRepository implements AuthRepository {
   ApiAuthRepository({required Dio dio, required TokenStorage tokenStorage})
     : _dio = dio,
@@ -38,6 +50,52 @@ class ApiAuthRepository implements AuthRepository {
     await _dio.post<dynamic>(
       '/auth/send-otp',
       data: {'phoneNumber': phoneNumber},
+      options: Options(extra: {'skipAuth': true}),
+    );
+  }
+
+  @override
+  Future<void> sendForgotPasswordOtp({required String phoneNumber}) async {
+    await _dio.post<dynamic>(
+      '/auth/forgot-password/send-otp',
+      data: {'phoneNumber': phoneNumber},
+      options: Options(extra: {'skipAuth': true}),
+    );
+  }
+
+  @override
+  Future<String> verifyForgotPasswordOtp({
+    required String phoneNumber,
+    required String otp,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      '/auth/forgot-password/verify-otp',
+      data: {'phoneNumber': phoneNumber, 'otp': otp},
+      options: Options(extra: {'skipAuth': true}),
+    );
+
+    final resetToken = _extractResetToken(response.data);
+    if (resetToken == null || resetToken.isEmpty) {
+      throw const FormatException(
+        'Reset token is missing in response payload.',
+      );
+    }
+    return resetToken;
+  }
+
+  @override
+  Future<void> resetPassword({
+    required String phoneNumber,
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    await _dio.post<dynamic>(
+      '/auth/forgot-password/reset',
+      data: {
+        'phoneNumber': phoneNumber,
+        'resetToken': resetToken,
+        'newPassword': newPassword,
+      },
       options: Options(extra: {'skipAuth': true}),
     );
   }
@@ -63,7 +121,8 @@ class ApiAuthRepository implements AuthRepository {
     try {
       await _dio.patch<dynamic>('/auth/fcm-token', data: payload);
     } on DioException catch (error) {
-      if (error.response?.statusCode != 404 && error.response?.statusCode != 405) {
+      if (error.response?.statusCode != 404 &&
+          error.response?.statusCode != 405) {
         rethrow;
       }
       await _dio.post<dynamic>('/auth/fcm-token', data: payload);
@@ -133,6 +192,18 @@ class ApiAuthRepository implements AuthRepository {
       refreshToken: refreshToken,
       expiresAt: expiresAt,
     );
+  }
+
+  String? _extractResetToken(dynamic data) {
+    if (data is! Map<String, dynamic>) {
+      return null;
+    }
+
+    final payload = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+
+    return payload['resetToken']?.toString();
   }
 
   DateTime? _parseExpiresAt(dynamic value) {

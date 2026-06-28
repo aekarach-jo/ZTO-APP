@@ -45,6 +45,22 @@ class _SmokeAuthRepository implements AuthRepository {
 
   @override
   Future<void> requestOtpForRegister({required String phoneNumber}) async {}
+
+  @override
+  Future<void> sendForgotPasswordOtp({required String phoneNumber}) async {}
+
+  @override
+  Future<String> verifyForgotPasswordOtp({
+    required String phoneNumber,
+    required String otp,
+  }) async => 'reset-token-123';
+
+  @override
+  Future<void> resetPassword({
+    required String phoneNumber,
+    required String resetToken,
+    required String newPassword,
+  }) async {}
 }
 
 void main() {

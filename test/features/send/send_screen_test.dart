@@ -58,10 +58,13 @@ Widget _buildTestApp(Widget child) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('shows send list and keeps next disabled until selection', (tester) async {
+  testWidgets('shows send list and keeps next disabled until selection', (
+    tester,
+  ) async {
     await tester.pumpWidget(_buildTestApp(const SendScreen()));
     await tester.pumpAndSettle();
 
+    expect(find.byType(RefreshIndicator), findsOneWidget);
     expect(find.text('Select parcel to forward'), findsOneWidget);
     expect(find.text('Sony WH-1000XM5 Headphones'), findsOneWidget);
 
@@ -96,31 +99,36 @@ void main() {
     expect(nextButton.onPressed, isNotNull);
   });
 
-  testWidgets('moves to recipient details after selecting item and tapping next', (tester) async {
-    await tester.pumpWidget(_buildTestApp(const SendScreen()));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'moves to recipient details after selecting item and tapping next',
+    (tester) async {
+      await tester.pumpWidget(_buildTestApp(const SendScreen()));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('send-item-TH88291039')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('send-item-TH88291039')));
+      await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('send-next-button')),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('send-next-button')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
 
-    final nextButtonFinder = find.descendant(
-      of: find.byKey(const ValueKey('send-next-button')),
-      matching: find.byType(ElevatedButton),
-    );
-    await tester.tap(nextButtonFinder);
-    await tester.pumpAndSettle();
+      final nextButtonFinder = find.descendant(
+        of: find.byKey(const ValueKey('send-next-button')),
+        matching: find.byType(ElevatedButton),
+      );
+      await tester.tap(nextButtonFinder);
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('send-recipient-step')), findsOneWidget);
-  });
+      expect(find.byKey(const ValueKey('send-recipient-step')), findsOneWidget);
+    },
+  );
 
-  testWidgets('enables pin-address button when recipient form is complete', (tester) async {
+  testWidgets('enables pin-address button when recipient form is complete', (
+    tester,
+  ) async {
     await tester.pumpWidget(_buildTestApp(const SendScreen()));
     await tester.pumpAndSettle();
 
@@ -157,15 +165,27 @@ void main() {
     ElevatedButton pinButton = tester.widget<ElevatedButton>(pinButtonFinder);
     expect(pinButton.onPressed, isNull);
 
-    await tester.enterText(find.byKey(const ValueKey('send-input-recipient-name')), 'John Doe');
-    await tester.enterText(find.byKey(const ValueKey('send-input-recipient-phone')), '0891234567');
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-recipient-name')),
+      'John Doe',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-recipient-phone')),
+      '0891234567',
+    );
     await tester.enterText(
       find.byKey(const ValueKey('send-input-recipient-address')),
       '123 Main Road',
     );
-    await tester.enterText(find.byKey(const ValueKey('send-input-courier')), 'Flash');
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-courier')),
+      'Flash',
+    );
 
-    await tester.enterText(find.byKey(const ValueKey('send-input-branch')), 'VTE-01');
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-branch')),
+      'VTE-01',
+    );
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -179,7 +199,9 @@ void main() {
     expect(pinButton.onPressed, isNotNull);
   });
 
-  testWidgets('moves to map step after tapping pin-address button', (tester) async {
+  testWidgets('moves to map step after tapping pin-address button', (
+    tester,
+  ) async {
     await tester.pumpWidget(_buildTestApp(const SendScreen()));
     await tester.pumpAndSettle();
 
@@ -208,14 +230,26 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const ValueKey('send-input-recipient-name')), 'John Doe');
-    await tester.enterText(find.byKey(const ValueKey('send-input-recipient-phone')), '0891234567');
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-recipient-name')),
+      'John Doe',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-recipient-phone')),
+      '0891234567',
+    );
     await tester.enterText(
       find.byKey(const ValueKey('send-input-recipient-address')),
       '123 Main Road',
     );
-    await tester.enterText(find.byKey(const ValueKey('send-input-courier')), 'Flash');
-    await tester.enterText(find.byKey(const ValueKey('send-input-branch')), 'VTE-01');
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-courier')),
+      'Flash',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-branch')),
+      'VTE-01',
+    );
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -236,7 +270,9 @@ void main() {
     expect(find.byKey(const ValueKey('send-pin-step')), findsOneWidget);
   });
 
-  testWidgets('moves to payment step and allows switching payment method', (tester) async {
+  testWidgets('moves to payment step and allows switching payment method', (
+    tester,
+  ) async {
     await tester.pumpWidget(_buildTestApp(const SendScreen()));
     await tester.pumpAndSettle();
 
@@ -264,14 +300,26 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const ValueKey('send-input-recipient-name')), 'John Doe');
-    await tester.enterText(find.byKey(const ValueKey('send-input-recipient-phone')), '0891234567');
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-recipient-name')),
+      'John Doe',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-recipient-phone')),
+      '0891234567',
+    );
     await tester.enterText(
       find.byKey(const ValueKey('send-input-recipient-address')),
       '123 Main Road',
     );
-    await tester.enterText(find.byKey(const ValueKey('send-input-courier')), 'Flash');
-    await tester.enterText(find.byKey(const ValueKey('send-input-branch')), 'VTE-01');
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-courier')),
+      'Flash',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('send-input-branch')),
+      'VTE-01',
+    );
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -314,9 +362,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('send-payment-method-bcel')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('send-confirm-forward-button')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('send-confirm-forward-button')),
+      findsOneWidget,
+    );
   });
 }
-
-
-

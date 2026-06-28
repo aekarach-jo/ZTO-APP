@@ -15,11 +15,54 @@ import 'package:zto_app/features/main_layout/presentation/screens/main_layout_sc
 
 import '../../test_helpers/mock_asset_loader.dart';
 
+class _MainLayoutLocaleAssetLoader extends AssetLoader {
+  const _MainLayoutLocaleAssetLoader();
+
+  @override
+  Future<Map<String, dynamic>> load(String path, Locale locale) async {
+    final translations = switch (locale.languageCode) {
+      'lo' => const {
+        'your_parcels': 'ລາຍການພັດສະດຸຂອງທ່ານ',
+        'switch_branch': 'ປ່ຽນສາຂາ',
+        'brand_subtitle': 'ສູນຮັບ-ສົ່ງພັດສະດຸດ່ວນ',
+      },
+      'zh' => const {
+        'your_parcels': '您的包裹',
+        'switch_branch': '切换网点',
+        'brand_subtitle': '快捷取件中心',
+      },
+      _ => const {
+        'your_parcels': 'Your Parcels',
+        'switch_branch': 'SWITCH BRANCH',
+        'brand_subtitle': 'Express Pickup Hub',
+      },
+    };
+
+    return {...kTestTranslations, ...translations};
+  }
+}
+
 class _FakeAuthRepository implements AuthRepository {
   const _FakeAuthRepository();
 
   @override
   Future<void> requestOtpForRegister({required String phoneNumber}) async {}
+
+  @override
+  Future<void> sendForgotPasswordOtp({required String phoneNumber}) async {}
+
+  @override
+  Future<String> verifyForgotPasswordOtp({
+    required String phoneNumber,
+    required String otp,
+  }) async => 'reset-token-123';
+
+  @override
+  Future<void> resetPassword({
+    required String phoneNumber,
+    required String resetToken,
+    required String newPassword,
+  }) async {}
 
   @override
   Future<void> loginWithPassword({
@@ -148,6 +191,10 @@ void main() {
       find.byKey(const ValueKey('topbar-menu-switch-language')),
       findsOneWidget,
     );
+    expect(find.text('SWITCH BRANCH'), findsOneWidget);
+    expect(find.byKey(const ValueKey('topbar-language-en')), findsOneWidget);
+    expect(find.byKey(const ValueKey('topbar-language-lo')), findsOneWidget);
+    expect(find.byKey(const ValueKey('topbar-language-zh')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('topbar-menu-switch-role')));
     await tester.pump(const Duration(milliseconds: 250));
 
@@ -160,7 +207,64 @@ void main() {
       findsOneWidget,
     );
     await tester.tap(find.byKey(const ValueKey('topbar-menu-switch-role')));
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your Parcels'), findsOneWidget);
+  });
+
+  testWidgets('top menu flags switch the whole app locale', (tester) async {
+    await tester.pumpWidget(
+      EasyLocalization(
+        supportedLocales: const [Locale('en'), Locale('lo'), Locale('zh')],
+        path: 'unused',
+        fallbackLocale: const Locale('en'),
+        startLocale: const Locale('en'),
+        saveLocale: false,
+        assetLoader: const _MainLayoutLocaleAssetLoader(),
+        child: Builder(
+          builder: (context) {
+            return ProviderScope(
+              overrides: [..._baseOverrides()],
+              child: ScreenUtilInit(
+                designSize: const Size(390, 844),
+                minTextAdapt: true,
+                splitScreenMode: true,
+                builder: (context, child) {
+                  return MaterialApp(
+                    locale: context.locale,
+                    supportedLocales: context.supportedLocales,
+                    localizationsDelegates: context.localizationDelegates,
+                    home: const MainLayoutScreen(),
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your Parcels'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('topbar-menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('topbar-language-lo')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ລາຍການພັດສະດຸຂອງທ່ານ'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('topbar-menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('topbar-language-zh')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('您的包裹'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('topbar-menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('topbar-language-en')));
+    await tester.pumpAndSettle();
 
     expect(find.text('Your Parcels'), findsOneWidget);
   });
@@ -300,6 +404,81 @@ void main() {
       matching: find.byType(Badge),
     );
     expect(navBadgeFinder, findsNothing);
+  });
+
+  testWidgets('notification badge shows unread count while on another tab', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      EasyLocalization(
+        supportedLocales: const [Locale('en')],
+        path: 'unused',
+        fallbackLocale: const Locale('en'),
+        startLocale: const Locale('en'),
+        assetLoader: const MockAssetLoader(kTestTranslations),
+        child: Builder(
+          builder: (context) {
+            return ProviderScope(
+              overrides: [
+                ..._baseOverrides(),
+                notificationsProvider.overrideWith(
+                  (ref) async => const <AppNotification>[
+                    AppNotification(
+                      id: 'n1',
+                      title: 'Unread 1',
+                      message: 'First unread notification',
+                      timeLabel: '1m ago',
+                      isUnread: true,
+                    ),
+                    AppNotification(
+                      id: 'n2',
+                      title: 'Read notification',
+                      message: 'Already read notification',
+                      timeLabel: '2m ago',
+                      isUnread: false,
+                    ),
+                    AppNotification(
+                      id: 'n3',
+                      title: 'Unread 2',
+                      message: 'Second unread notification',
+                      timeLabel: '3m ago',
+                      isUnread: true,
+                    ),
+                  ],
+                ),
+              ],
+              child: ScreenUtilInit(
+                designSize: const Size(390, 844),
+                minTextAdapt: true,
+                splitScreenMode: true,
+                builder: (context, child) {
+                  return MaterialApp(
+                    locale: context.locale,
+                    supportedLocales: context.supportedLocales,
+                    localizationsDelegates: context.localizationDelegates,
+                    home: const MainLayoutScreen(),
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your Parcels'), findsOneWidget);
+
+    final navBadgeFinder = find.descendant(
+      of: find.byType(BottomNavigationBar),
+      matching: find.byType(Badge),
+    );
+    expect(navBadgeFinder, findsOneWidget);
+    expect(
+      find.descendant(of: navBadgeFinder, matching: find.text('2')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('customer profile tab renders profile screen', (tester) async {

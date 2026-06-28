@@ -14,6 +14,28 @@ class _FakeAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> sendForgotPasswordOtp({required String phoneNumber}) async {
+    return;
+  }
+
+  @override
+  Future<String> verifyForgotPasswordOtp({
+    required String phoneNumber,
+    required String otp,
+  }) async {
+    return 'reset-token-123';
+  }
+
+  @override
+  Future<void> resetPassword({
+    required String phoneNumber,
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    return;
+  }
+
+  @override
   Future<void> loginWithPassword({
     required String phoneNumber,
     required String password,
@@ -133,6 +155,66 @@ void main() {
     final state = container.read(authProvider);
     expect(success, isTrue);
     expect(state.message, 'otp_sent');
+  });
+
+  test('requestForgotPasswordOtp validates Laos phone format', () async {
+    final container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(const _FakeAuthRepository()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final success = await container
+        .read(authProvider.notifier)
+        .requestForgotPasswordOtp(phoneNumber: '+8561091234567');
+
+    final state = container.read(authProvider);
+    expect(success, isFalse);
+    expect(state.message, 'invalid_phone_number');
+  });
+
+  test('verifyForgotPasswordOtp stores reset token', () async {
+    final container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(const _FakeAuthRepository()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final token = await container
+        .read(authProvider.notifier)
+        .verifyForgotPasswordOtp(phoneNumber: '+8562091234567', otp: '123456');
+
+    final state = container.read(authProvider);
+    expect(token, 'reset-token-123');
+    expect(state.resetToken, 'reset-token-123');
+    expect(state.message, 'otp_verified');
+  });
+
+  test('resetForgotPassword success clears reset token', () async {
+    final container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(const _FakeAuthRepository()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(authProvider.notifier)
+        .verifyForgotPasswordOtp(phoneNumber: '+8562091234567', otp: '123456');
+    final success = await container
+        .read(authProvider.notifier)
+        .resetForgotPassword(
+          phoneNumber: '+8562091234567',
+          resetToken: 'reset-token-123',
+          newPassword: 'NewPass123!',
+        );
+
+    final state = container.read(authProvider);
+    expect(success, isTrue);
+    expect(state.resetToken, isNull);
+    expect(state.message, 'password_reset_success');
   });
 
   test('login success keeps role as customer', () async {

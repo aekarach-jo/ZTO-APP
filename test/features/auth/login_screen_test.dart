@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:zto_app/features/auth/data/auth_repository.dart';
+import 'package:zto_app/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:zto_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:zto_app/features/auth/presentation/screens/register_screen.dart';
 import 'package:zto_app/features/main_layout/presentation/screens/main_layout_screen.dart';
@@ -32,6 +33,22 @@ class _SuccessAuthRepository implements AuthRepository {
   Future<void> requestOtpForRegister({required String phoneNumber}) async {}
 
   @override
+  Future<void> sendForgotPasswordOtp({required String phoneNumber}) async {}
+
+  @override
+  Future<String> verifyForgotPasswordOtp({
+    required String phoneNumber,
+    required String otp,
+  }) async => 'reset-token-123';
+
+  @override
+  Future<void> resetPassword({
+    required String phoneNumber,
+    required String resetToken,
+    required String newPassword,
+  }) async {}
+
+  @override
   Future<void> loginWithPassword({
     required String phoneNumber,
     required String password,
@@ -56,6 +73,22 @@ class _FailingAuthRepository implements AuthRepository {
 
   @override
   Future<void> requestOtpForRegister({required String phoneNumber}) async {}
+
+  @override
+  Future<void> sendForgotPasswordOtp({required String phoneNumber}) async {}
+
+  @override
+  Future<String> verifyForgotPasswordOtp({
+    required String phoneNumber,
+    required String otp,
+  }) async => 'reset-token-123';
+
+  @override
+  Future<void> resetPassword({
+    required String phoneNumber,
+    required String resetToken,
+    required String newPassword,
+  }) async {}
 
   @override
   Future<void> loginWithPassword({
@@ -91,6 +124,11 @@ Widget _buildTestApp({required AuthRepository authRepository}) {
         path: RegisterScreen.routePath,
         builder: (context, state) =>
             const Scaffold(body: Text('REGISTER_SCREEN')),
+      ),
+      GoRoute(
+        path: ForgotPasswordScreen.routePath,
+        builder: (context, state) =>
+            const Scaffold(body: Text('FORGOT_PASSWORD_SCREEN')),
       ),
       GoRoute(
         path: MainLayoutScreen.routePath,
@@ -184,9 +222,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text("Don't have an account? Register"));
     await tester.tap(find.text("Don't have an account? Register"));
     await tester.pumpAndSettle();
 
     expect(find.text('REGISTER_SCREEN'), findsOneWidget);
+  });
+
+  testWidgets('navigates to forgot password screen from login link', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildTestApp(authRepository: const _SuccessAuthRepository()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Forgot password?'));
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('FORGOT_PASSWORD_SCREEN'), findsOneWidget);
   });
 }

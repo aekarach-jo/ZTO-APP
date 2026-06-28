@@ -57,7 +57,9 @@ Widget _buildTestApp(Widget child) {
               localizationsDelegates: context.localizationDelegates,
               home: ProviderScope(
                 overrides: [
-                  contactRepositoryProvider.overrideWith((ref) => _FakeContactRepository()),
+                  contactRepositoryProvider.overrideWith(
+                    (ref) => _FakeContactRepository(),
+                  ),
                 ],
                 child: Scaffold(body: child),
               ),
@@ -76,6 +78,7 @@ void main() {
     await tester.pumpWidget(_buildTestApp(const ContactScreen()));
     await tester.pumpAndSettle();
 
+    expect(find.byType(RefreshIndicator), findsOneWidget);
     expect(
       find.text('Welcome to support. Ask parcel status now!'),
       findsOneWidget,
@@ -89,7 +92,10 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Support received: Where is parcel #FW123'), findsOneWidget);
+    expect(
+      find.text('Support received: Where is parcel #FW123'),
+      findsOneWidget,
+    );
 
     final bubbleFinder = find.byWidgetPredicate(
       (widget) =>

@@ -20,28 +20,35 @@ class AppNotification {
   final bool isUnread;
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
-    final id = _readString(json, const ['id', '_id', 'notificationId']) ??
+    final id =
+        _readString(json, const ['id', '_id', 'notificationId']) ??
         DateTime.now().microsecondsSinceEpoch.toString();
 
     final title =
         _readString(json, const ['title', 'subject', 'name']) ?? 'Notification';
-    final message = _readString(
-          json,
-          const ['message', 'body', 'description', 'content'],
-        ) ??
+    final message =
+        _readString(json, const [
+          'message',
+          'body',
+          'description',
+          'content',
+        ]) ??
         '-';
 
-    final sentAtRaw = _readString(
-      json,
-      const ['createdAt', 'created_at', 'sentAt', 'sent_at', 'updatedAt'],
-    );
+    final sentAtRaw = _readString(json, const [
+      'createdAt',
+      'created_at',
+      'sentAt',
+      'sent_at',
+      'updatedAt',
+    ]);
 
     return AppNotification(
       id: id,
       title: title,
       message: message,
       timeLabel: _formatTimeLabel(sentAtRaw),
-      isUnread: _readBool(json, const ['isUnread', 'unread', 'is_read']) ?? false,
+      isUnread: _readUnreadFlag(json) ?? false,
     );
   }
 
@@ -83,6 +90,66 @@ class AppNotification {
     if (isRead is bool) {
       return !isRead;
     }
+    return null;
+  }
+
+  static bool? _readUnreadFlag(Map<String, dynamic> json) {
+    final unread = _readBool(json, const ['isUnread', 'unread']);
+    if (unread != null) {
+      return unread;
+    }
+
+    final isRead = _readBool(json, const ['isRead', 'is_read', 'read']);
+    if (isRead != null) {
+      return !isRead;
+    }
+
+    final readAt = _readReadAtFlag(json);
+    if (readAt != null) {
+      return readAt;
+    }
+
+    final status = _readReadStatus(json);
+    if (status != null) {
+      return status;
+    }
+
+    return null;
+  }
+
+  static bool? _readReadAtFlag(Map<String, dynamic> json) {
+    for (final key in const ['readAt', 'read_at', 'readTimestamp']) {
+      if (!json.containsKey(key)) {
+        continue;
+      }
+
+      final value = json[key];
+      if (value == null) {
+        return true;
+      }
+      if (value is String && value.trim().isEmpty) {
+        return true;
+      }
+      return false;
+    }
+
+    return null;
+  }
+
+  static bool? _readReadStatus(Map<String, dynamic> json) {
+    final status = _readString(json, const ['status', 'readStatus', 'state']);
+    if (status == null) {
+      return null;
+    }
+
+    final normalized = status.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+    if (const {'unread', 'new', 'unseen'}.contains(normalized)) {
+      return true;
+    }
+    if (const {'read', 'seen', 'opened'}.contains(normalized)) {
+      return false;
+    }
+
     return null;
   }
 
@@ -140,6 +207,19 @@ class NotificationRepository {
     return notifications;
   }
 
+  Future<void> markAsRead(String id) async {
+    final encodedId = Uri.encodeComponent(id);
+    final response = await _dio.patch<dynamic>(
+      '/notifications/$encodedId/read',
+    );
+
+    if (kDebugMode) {
+      debugPrint(
+        '[NotificationRepository] PATCH /notifications/$encodedId/read status=${response.statusCode}',
+      );
+    }
+  }
+
   List<dynamic> _extractList(dynamic data) {
     if (data is List<dynamic>) {
       if (kDebugMode) {
@@ -155,7 +235,9 @@ class NotificationRepository {
             nestedMap['items'] ?? nestedMap['results'] ?? nestedMap['data'];
         if (nestedInNotifications is List<dynamic>) {
           if (kDebugMode) {
-            debugPrint('[NotificationRepository] Extracted from notifications.items/results/data');
+            debugPrint(
+              '[NotificationRepository] Extracted from notifications.items/results/data',
+            );
           }
           return nestedInNotifications;
         }
@@ -177,16 +259,21 @@ class NotificationRepository {
             direct['records'];
         if (nested is List<dynamic>) {
           if (kDebugMode) {
-            debugPrint('[NotificationRepository] Extracted from data.items/notifications/results/rows/records');
+            debugPrint(
+              '[NotificationRepository] Extracted from data.items/notifications/results/rows/records',
+            );
           }
           return nested;
         }
 
         if (nested is Map<String, dynamic>) {
-          final nestedList = nested['items'] ?? nested['results'] ?? nested['data'];
+          final nestedList =
+              nested['items'] ?? nested['results'] ?? nested['data'];
           if (nestedList is List<dynamic>) {
             if (kDebugMode) {
-              debugPrint('[NotificationRepository] Extracted from nested map items/results/data');
+              debugPrint(
+                '[NotificationRepository] Extracted from nested map items/results/data',
+              );
             }
             return nestedList;
           }
@@ -201,14 +288,18 @@ class NotificationRepository {
           data['records'];
       if (root is List<dynamic>) {
         if (kDebugMode) {
-          debugPrint('[NotificationRepository] Extracted from root items/notifications/results/rows/records');
+          debugPrint(
+            '[NotificationRepository] Extracted from root items/notifications/results/rows/records',
+          );
         }
         return root;
       }
     }
 
     if (kDebugMode) {
-      debugPrint('[NotificationRepository] Could not match a list path in payload');
+      debugPrint(
+        '[NotificationRepository] Could not match a list path in payload',
+      );
     }
     return const <dynamic>[];
   }
@@ -222,4 +313,3 @@ final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
 final notificationsProvider = FutureProvider<List<AppNotification>>((ref) {
   return ref.watch(notificationRepositoryProvider).fetchNotifications();
 });
-

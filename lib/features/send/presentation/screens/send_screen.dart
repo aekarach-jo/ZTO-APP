@@ -49,7 +49,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   static const double _vatRate = 0.07;
 
   bool get _isRecipientFormComplete {
-    final phoneDigits = _recipientPhoneController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final phoneDigits = _recipientPhoneController.text.replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
     return _recipientNameController.text.trim().isNotEmpty &&
         _recipientAddressController.text.trim().isNotEmpty &&
         _courierController.text.trim().isNotEmpty &&
@@ -74,10 +77,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     return _step == _SendStep.selectParcel
         ? _buildSelectParcelStep(context, parcelsAsync)
         : _step == _SendStep.recipientDetails
-            ? _buildRecipientStep(context, parcelsAsync)
-            : _step == _SendStep.pinAddress
-                ? _buildPinMapStep(context, parcelsAsync)
-                : _buildPaymentStep(context, parcelsAsync);
+        ? _buildRecipientStep(context, parcelsAsync)
+        : _step == _SendStep.pinAddress
+        ? _buildPinMapStep(context, parcelsAsync)
+        : _buildPaymentStep(context, parcelsAsync);
   }
 
   Widget _buildSelectParcelStep(
@@ -86,7 +89,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   ) {
     final hasSelection = _selectedParcelId != null;
 
-    return ListView(
+    return _buildRefreshableListView(
       key: const ValueKey('send-select-step'),
       padding: EdgeInsets.fromLTRB(14.w, 16.h, 14.w, 20.h),
       children: [
@@ -132,7 +135,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, __) => _SimpleStateCard(
+          error: (error, stackTrace) => _SimpleStateCard(
             icon: Icons.error_outline,
             message: _SendTextKeys.loadParcelsError,
             actionLabel: _SendTextKeys.retry,
@@ -163,7 +166,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       return _buildInvalidSelectionState();
     }
 
-    return ListView(
+    return _buildRefreshableListView(
       key: const ValueKey('send-recipient-step'),
       padding: EdgeInsets.fromLTRB(14.w, 16.h, 14.w, 20.h),
       children: [
@@ -262,12 +265,13 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       return _buildInvalidSelectionState();
     }
     final isWidgetTest = const bool.fromEnvironment('FLUTTER_TEST');
-    final isUnsupportedDesktop = !kIsWeb &&
+    final isUnsupportedDesktop =
+        !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.windows ||
             defaultTargetPlatform == TargetPlatform.linux);
 
-    return ListView(
+    return _buildRefreshableListView(
       key: const ValueKey('send-pin-step'),
       padding: EdgeInsets.fromLTRB(14.w, 16.h, 14.w, 20.h),
       children: [
@@ -326,14 +330,21 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                   right: 14.w,
                   top: 14.h,
                   child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 14.w,
+                      vertical: 10.h,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16.r),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.location_on, color: const Color(0xFFD64B3B), size: 16.sp),
+                        Icon(
+                          Icons.location_on,
+                          color: const Color(0xFFD64B3B),
+                          size: 16.sp,
+                        ),
                         SizedBox(width: 6.w),
                         Expanded(
                           child: Text(
@@ -366,7 +377,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _SendTextKeys.pinCoordinateLabel.tr(args: [selectedItem.trackNo]),
+                _SendTextKeys.pinCoordinateLabel.tr(
+                  args: [selectedItem.trackNo],
+                ),
                 style: TextStyle(
                   color: const Color(0xFF8390A3),
                   fontSize: 12.sp,
@@ -411,7 +424,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     final vatAmount = _forwardingFee * _vatRate;
     final totalAmount = _forwardingFee + vatAmount;
 
-    return ListView(
+    return _buildRefreshableListView(
       key: const ValueKey('send-summary-step'),
       padding: EdgeInsets.fromLTRB(14.w, 16.h, 14.w, 20.h),
       children: [
@@ -484,7 +497,11 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                 smallValue: true,
               ),
               SizedBox(height: 12.h),
-              Divider(height: 1, color: const Color(0xFFD0D9E4), thickness: 1.1),
+              Divider(
+                height: 1,
+                color: const Color(0xFFD0D9E4),
+                thickness: 1.1,
+              ),
               SizedBox(height: 12.h),
               _PriceRow(
                 label: _SendTextKeys.paymentTotalLabel.tr(),
@@ -520,7 +537,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         SizedBox(height: 16.h),
         _PrimaryActionButton(
           key: const ValueKey('send-confirm-forward-button'),
-          label: _SendTextKeys.paymentConfirmButton.tr(args: [_formatBaht(totalAmount)]),
+          label: _SendTextKeys.paymentConfirmButton.tr(
+            args: [_formatBaht(totalAmount)],
+          ),
           enabled: !_isSubmitting,
           onPressed: () => _handleForwardConfirm(selectedItem),
         ),
@@ -529,7 +548,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   }
 
   Widget _buildInvalidSelectionState() {
-    return ListView(
+    return _buildRefreshableListView(
       key: const ValueKey('send-invalid-selection-step'),
       padding: EdgeInsets.fromLTRB(14.w, 16.h, 14.w, 20.h),
       children: [
@@ -548,22 +567,39 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     );
   }
 
-  SendParcelItem? _selectedParcel(AsyncValue<List<SendParcelItem>> parcelsAsync) {
+  Widget _buildRefreshableListView({
+    required Key key,
+    required EdgeInsetsGeometry padding,
+    required List<Widget> children,
+  }) {
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(sendParcelsProvider.future),
+      child: ListView(
+        key: key,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: padding,
+        children: children,
+      ),
+    );
+  }
+
+  SendParcelItem? _selectedParcel(
+    AsyncValue<List<SendParcelItem>> parcelsAsync,
+  ) {
     final selectedId = _selectedParcelId;
     if (selectedId == null) {
       return null;
     }
-    return parcelsAsync.maybeWhen(
-      data: (items) {
-        for (final item in items) {
-          if (item.id == selectedId) {
-            return item;
-          }
-        }
-        return null;
-      },
-      orElse: () => null,
-    );
+    final items = parcelsAsync.valueOrNull;
+    if (items == null) {
+      return null;
+    }
+    for (final item in items) {
+      if (item.id == selectedId) {
+        return item;
+      }
+    }
+    return null;
   }
 
   Future<void> _handleForwardConfirm(SendParcelItem selectedItem) async {
@@ -572,7 +608,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     });
 
     try {
-      await ref.read(sendRepositoryProvider).createForwardRequest(
+      await ref
+          .read(sendRepositoryProvider)
+          .createForwardRequest(
             CreateForwardRequest(
               parcelId: selectedItem.id,
               recipientName: _recipientNameController.text.trim(),
@@ -691,7 +729,9 @@ class _SendParcelCard extends StatelessWidget {
             ),
             Icon(
               selected ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: selected ? const Color(0xFFE9650E) : const Color(0xFFD4DCE8),
+              color: selected
+                  ? const Color(0xFFE9650E)
+                  : const Color(0xFFD4DCE8),
               size: 22.sp,
             ),
           ],
@@ -754,7 +794,11 @@ class _SelectedParcelSummary extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.inventory_2_rounded, size: 20.sp, color: const Color(0xFFAE7D39)),
+          Icon(
+            Icons.inventory_2_rounded,
+            size: 20.sp,
+            color: const Color(0xFFAE7D39),
+          ),
           SizedBox(width: 10.w),
           Expanded(
             child: Column(
@@ -880,10 +924,7 @@ class _PrimaryActionButton extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18.r),
           ),
-          textStyle: TextStyle(
-            fontSize: 16.sp,
-            fontWeight: FontWeight.w800,
-          ),
+          textStyle: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w800),
         ),
         child: Text(label),
       ),
@@ -933,7 +974,9 @@ class _PriceRow extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: highlight ? const Color(0xFF101010) : const Color(0xFF6F7D8F),
+              color: highlight
+                  ? const Color(0xFF101010)
+                  : const Color(0xFF6F7D8F),
               fontSize: highlight ? 18.sp : 15.sp,
               fontWeight: FontWeight.w800,
             ),
@@ -942,7 +985,9 @@ class _PriceRow extends StatelessWidget {
         Text(
           amount,
           style: TextStyle(
-            color: highlight ? const Color(0xFFE9650E) : const Color(0xFF101010),
+            color: highlight
+                ? const Color(0xFFE9650E)
+                : const Color(0xFF101010),
             fontSize: highlight ? 32.sp : (smallValue ? 20.sp : 24.sp),
             fontWeight: FontWeight.w800,
           ),
@@ -1025,7 +1070,9 @@ class _PaymentMethodCard extends StatelessWidget {
             ),
             Icon(
               selected ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: selected ? const Color(0xFFE9650E) : const Color(0xFFD3DBE7),
+              color: selected
+                  ? const Color(0xFFE9650E)
+                  : const Color(0xFFD3DBE7),
               size: 22.sp,
             ),
           ],
@@ -1144,11 +1191,4 @@ class _SendTextKeys {
   static const String back = 'common_back';
 }
 
-enum _SendStep {
-  selectParcel,
-  recipientDetails,
-  pinAddress,
-  summaryPayment,
-}
-
-
+enum _SendStep { selectParcel, recipientDetails, pinAddress, summaryPayment }

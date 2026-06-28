@@ -19,115 +19,120 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final parcelsAsync = ref.watch(homeParcelsProvider);
 
-    return ListView(
-      padding: EdgeInsets.only(bottom: 20.h),
-      children: [
-        Container(
-          padding: EdgeInsets.fromLTRB(16.w, 18.h, 16.w, 26.h),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE9650E),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(40.r),
-              bottomRight: Radius.circular(40.r),
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(homeParcelsProvider.future),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(bottom: 20.h),
+        children: [
+          Container(
+            padding: EdgeInsets.fromLTRB(16.w, 18.h, 16.w, 26.h),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE9650E),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(40.r),
+                bottomRight: Radius.circular(40.r),
+              ),
             ),
-          ),
-          child: Column(
-            children: [
-              SizedBox(height: 12.h),
-              Container(
-                width: 106.w,
-                height: 106.w,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 3),
-                  color: Colors.white,
-                ),
-                child: const Icon(Icons.person, size: 56),
-              ),
-              SizedBox(height: 12.h),
-              Text(
-                _ProfileTextKeys.userName.tr(),
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 24.sp,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              SizedBox(height: 2.h),
-              Text(
-                _ProfileTextKeys.userEmail.tr(),
-                style: TextStyle(
-                  color: Colors.black.withValues(alpha: 0.9),
-                  fontSize: 15.sp,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(height: 16.h),
-        parcelsAsync.when(
-          data: (parcels) {
-            final grouped = _GroupedParcels.from(parcels);
-            final summaryItems = _buildSummaryItems(grouped);
-            return Column(
+            child: Column(
               children: [
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 14.w),
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < summaryItems.length; i++) ...[
-                        Expanded(
-                          child: _SummaryCard(
-                            item: summaryItems[i],
-                            cardKey: ValueKey('profile-summary-$i'),
-                            selected: i == _selectedSummaryIndex,
-                            onTap: () {
-                              setState(() {
-                                _selectedSummaryIndex = i;
-                              });
-                            },
-                          ),
-                        ),
-                        if (i != summaryItems.length - 1) SizedBox(width: 8.w),
-                      ],
-                    ],
+                SizedBox(height: 12.h),
+                Container(
+                  width: 106.w,
+                  height: 106.w,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                    color: Colors.white,
+                  ),
+                  child: const Icon(Icons.person, size: 56),
+                ),
+                SizedBox(height: 12.h),
+                Text(
+                  _ProfileTextKeys.userName.tr(),
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 24.sp,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                ..._buildSelectedSection(grouped),
+                SizedBox(height: 2.h),
+                Text(
+                  _ProfileTextKeys.userEmail.tr(),
+                  style: TextStyle(
+                    color: Colors.black.withValues(alpha: 0.9),
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
-            );
-          },
-          loading: () => Padding(
-            padding: EdgeInsets.only(top: 18.h),
-            child: const Center(child: CircularProgressIndicator()),
-          ),
-          error: (_, __) => Padding(
-            padding: EdgeInsets.all(16.w),
-            child: _SimpleStateCard(
-              message: _ProfileTextKeys.loadError,
-              actionLabel: _ProfileTextKeys.retry,
-              onAction: () => ref.invalidate(homeParcelsProvider),
             ),
           ),
-        ),
-        SizedBox(height: 14.h),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 14.w),
-          child: _LocationCard(
-            onPinMap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('action_not_implemented'.tr())),
+          SizedBox(height: 16.h),
+          parcelsAsync.when(
+            data: (parcels) {
+              final grouped = _GroupedParcels.from(parcels);
+              final summaryItems = _buildSummaryItems(grouped);
+              return Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 14.w),
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < summaryItems.length; i++) ...[
+                          Expanded(
+                            child: _SummaryCard(
+                              item: summaryItems[i],
+                              cardKey: ValueKey('profile-summary-$i'),
+                              selected: i == _selectedSummaryIndex,
+                              onTap: () {
+                                setState(() {
+                                  _selectedSummaryIndex = i;
+                                });
+                              },
+                            ),
+                          ),
+                          if (i != summaryItems.length - 1)
+                            SizedBox(width: 8.w),
+                        ],
+                      ],
+                    ),
+                  ),
+                  ..._buildSelectedSection(grouped),
+                ],
               );
             },
-            onSave: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(_ProfileTextKeys.savedMessage.tr())),
-              );
-            },
+            loading: () => Padding(
+              padding: EdgeInsets.only(top: 18.h),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, stackTrace) => Padding(
+              padding: EdgeInsets.all(16.w),
+              child: _SimpleStateCard(
+                message: _ProfileTextKeys.loadError,
+                actionLabel: _ProfileTextKeys.retry,
+                onAction: () => ref.invalidate(homeParcelsProvider),
+              ),
+            ),
           ),
-        ),
-      ],
+          SizedBox(height: 14.h),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14.w),
+            child: _LocationCard(
+              onPinMap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('action_not_implemented'.tr())),
+                );
+              },
+              onSave: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(_ProfileTextKeys.savedMessage.tr())),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -491,7 +496,11 @@ class _ProfileSummaryItem {
 }
 
 class _SimpleStateCard extends StatelessWidget {
-  const _SimpleStateCard({required this.message, this.actionLabel, this.onAction});
+  const _SimpleStateCard({
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
 
   final String message;
   final String? actionLabel;
@@ -509,7 +518,11 @@ class _SimpleStateCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(Icons.inventory_2_outlined, color: const Color(0xFFA2AFBF), size: 24.sp),
+          Icon(
+            Icons.inventory_2_outlined,
+            color: const Color(0xFFA2AFBF),
+            size: 24.sp,
+          ),
           SizedBox(height: 8.h),
           Text(
             message.tr(),
@@ -555,7 +568,9 @@ class _GroupedParcels {
         completed.add(item);
       } else if (status == 'at_home') {
         atHome.add(item);
-      } else if (status == 'arrived' || status == 'picked_up' || status == 'received') {
+      } else if (status == 'arrived' ||
+          status == 'picked_up' ||
+          status == 'received') {
         received.add(item);
       } else {
         processing.add(item);
@@ -580,9 +595,11 @@ class _ProfileTextKeys {
   static const String summaryCompleted = 'profile_summary_completed';
   static const String activeParcelsTitle = 'profile_active_parcels_title';
   static const String receivedHistoryTitle = 'profile_received_history_title';
-  static const String homeDeliveryHistoryTitle = 'profile_home_delivery_history_title';
+  static const String homeDeliveryHistoryTitle =
+      'profile_home_delivery_history_title';
   static const String completedHistoryTitle = 'profile_completed_history_title';
-  static const String homeDeliveryEmptyMessage = 'profile_home_delivery_empty_message';
+  static const String homeDeliveryEmptyMessage =
+      'profile_home_delivery_empty_message';
   static const String currentLocationTitle = 'profile_current_location_title';
   static const String currentLocationLabel = 'profile_current_location_label';
   static const String pinMapAction = 'profile_pin_map_action';

@@ -66,6 +66,7 @@ void main() {
     await tester.pumpWidget(_buildTestApp(const ProfileScreen()));
     await tester.pumpAndSettle();
 
+    expect(find.byType(RefreshIndicator), findsOneWidget);
     expect(find.text('Somchai Rakdee'), findsOneWidget);
     expect(find.byKey(const ValueKey('profile-summary-0')), findsOneWidget);
 
@@ -105,7 +106,11 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('profile-summary-1')));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Service history'), 220, scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('Service history'),
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     expect(find.text('Service history'), findsOneWidget);
     expect(find.text('No received history'), findsOneWidget);

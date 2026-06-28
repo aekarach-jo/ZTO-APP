@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/home/data/home_parcel_repository.dart';
 import '../../features/main_layout/application/main_layout_navigation_provider.dart';
 import '../../features/main_layout/presentation/screens/main_layout_screen.dart';
 import '../../features/notifications/data/notification_repository.dart';
@@ -23,6 +24,13 @@ const AndroidNotificationChannel _ztoNotificationChannel =
 
 final FlutterLocalNotificationsPlugin _localNotifications =
     FlutterLocalNotificationsPlugin();
+
+void refreshFcmRelatedProviders(
+  void Function(ProviderOrFamily provider) invalidate,
+) {
+  invalidate(notificationsProvider);
+  invalidate(homeParcelsProvider);
+}
 
 Future<bool> _ensureFirebaseInitialized() async {
   try {
@@ -132,7 +140,7 @@ class FcmNotificationService {
 
     _foregroundSubscription = FirebaseMessaging.onMessage.listen((message) {
       _logRemoteMessage('Foreground message received', message);
-      _refreshNotifications();
+      _refreshFcmRelatedData();
       unawaited(_showLocalNotification(message));
     });
 
@@ -149,14 +157,15 @@ class FcmNotificationService {
 
   void _handleNotificationOpened(RemoteMessage message) {
     _logRemoteMessage('Notification opened', message);
-    _refreshNotifications();
+    _refreshFcmRelatedData();
     _ref.read(customerTabJumpTargetProvider.notifier).state = 2;
     _ref.read(appRouterProvider).go(MainLayoutScreen.routePath);
   }
 
-  void _refreshNotifications() {
+  void _refreshFcmRelatedData() {
     _logFcm('Refreshing notificationsProvider');
-    _ref.invalidate(notificationsProvider);
+    _logFcm('Refreshing homeParcelsProvider');
+    refreshFcmRelatedProviders(_ref.invalidate);
   }
 }
 

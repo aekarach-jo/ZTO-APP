@@ -11,8 +11,11 @@ const Map<String, dynamic> kTestTranslations = {
   'tab_scan_pay': 'Scan Pay',
   'tab_branch': 'Branches',
   'tab_customer_chat': 'Customer Chat',
-  'switch_to_staff': 'SWITCH TO STAFF',
+  'switch_branch': 'SWITCH BRANCH',
   'switch_to_customer': 'SWITCH TO CUSTOMER',
+  'language_english': 'English',
+  'language_lao': 'Lao',
+  'language_chinese': 'Chinese',
   'topbar_menu': 'Top menu',
   'logout': 'Logout',
   'logout_success': 'Logged out successfully',
@@ -25,8 +28,8 @@ const Map<String, dynamic> kTestTranslations = {
   'status_waiting_inspection': 'Waiting for Inspection',
   'status_ready_to_ship': 'Ready to Ship',
   'status_shipping_started': 'Shipping Started',
-  'action_drop_at_service_point': 'Drop at Service Point',
-  'action_call_pickup': 'Request Pickup',
+  'action_pickup': 'Pickup',
+  'action_forward': 'Forward',
   'action_confirm_inspected': 'Confirm Inspection',
   'new_tag': 'NEW',
   'no_parcel_found': 'No parcels match your search',
@@ -156,6 +159,25 @@ const Map<String, dynamic> kTestTranslations = {
   'staff_scan_pay_confirm_failed': 'Failed to confirm handover',
   'staff_scan_pay_confirm_handover': 'Confirm handover',
   'staff_scan_pay_load_error': 'Failed to load ready-to-handover parcels',
+  'forgot_password': 'Forgot password?',
+  'forgot_password_title': 'Forgot password',
+  'forgot_password_subtitle':
+      'Enter your registered Lao phone number to receive an OTP',
+  'back_to_login': 'Back to login',
+  'continue': 'Continue',
+  'otp_verified': 'OTP verified',
+  'otp_expired_or_not_requested':
+      'OTP expired or not requested. Please request a new OTP',
+  'phone_not_registered': 'No account found with this phone number',
+  'reset_password_title': 'Reset password',
+  'reset_password_subtitle':
+      'Create a new password. You will need to login again after reset',
+  'new_password': 'New password',
+  'reset_password': 'Reset password',
+  'password_reset_success': 'Password reset successfully. Please login again',
+  'password_reset_failed': 'Unable to reset password, please try again',
+  'reset_token_invalid_or_expired':
+      'Reset token expired or invalid. Please start again',
 };
 
 class MockAssetLoader extends AssetLoader {

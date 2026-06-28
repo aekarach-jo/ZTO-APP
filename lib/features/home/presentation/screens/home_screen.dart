@@ -26,57 +26,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final parcelsAsync = ref.watch(homeParcelsProvider);
     final query = _searchController.text.trim().toLowerCase();
 
-    return ListView(
-      padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
-      children: [
-        Text(
-          'your_parcels'.tr(),
-          style: TextStyle(
-            fontSize: 26.sp,
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFF111111),
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(homeParcelsProvider.future),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
+        children: [
+          Text(
+            'your_parcels'.tr(),
+            style: TextStyle(
+              fontSize: 26.sp,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF111111),
+            ),
           ),
-        ),
-        SizedBox(height: 12.h),
-        _SearchBar(
-          controller: _searchController,
-          hint: 'search_parcel_or_item'.tr(),
-          onChanged: (_) => setState(() {}),
-        ),
-        SizedBox(height: 14.h),
-        parcelsAsync.when(
-          data: (apiParcels) {
-            final parcels = apiParcels.map(_ParcelItem.fromApi).toList(growable: false);
-            final filteredParcels = parcels.where((item) => item.matches(query)).toList();
+          SizedBox(height: 12.h),
+          _SearchBar(
+            controller: _searchController,
+            hint: 'search_parcel_or_item'.tr(),
+            onChanged: (_) => setState(() {}),
+          ),
+          SizedBox(height: 14.h),
+          parcelsAsync.when(
+            data: (apiParcels) {
+              final parcels = apiParcels
+                  .map(_ParcelItem.fromApi)
+                  .toList(growable: false);
+              final filteredParcels = parcels
+                  .where((item) => item.matches(query))
+                  .toList();
 
-            if (filteredParcels.isEmpty) {
-              return _EmptyState(message: 'no_parcel_found'.tr());
-            }
+              if (filteredParcels.isEmpty) {
+                return _EmptyState(message: 'no_parcel_found'.tr());
+              }
 
-            return Column(
-              children: [
-                for (var i = 0; i < filteredParcels.length; i++) ...[
-                  _ParcelCard(
-                    item: filteredParcels[i],
-                    onDropAtPoint: () => _showNotImplementedSnack(context),
-                    onCallPickup: () => _showNotImplementedSnack(context),
-                  ),
-                  if (i != filteredParcels.length - 1) SizedBox(height: 14.h),
+              return Column(
+                children: [
+                  for (var i = 0; i < filteredParcels.length; i++) ...[
+                    _ParcelCard(
+                      item: filteredParcels[i],
+                      onDropAtPoint: () => _showNotImplementedSnack(context),
+                      onCallPickup: () => _showNotImplementedSnack(context),
+                    ),
+                    if (i != filteredParcels.length - 1) SizedBox(height: 14.h),
+                  ],
                 ],
-              ],
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, __) => _EmptyState(message: 'no_parcel_found'.tr()),
-        ),
-      ],
+              );
+            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, stackTrace) =>
+                _EmptyState(message: 'no_parcel_found'.tr()),
+          ),
+        ],
+      ),
     );
   }
 
   void _showNotImplementedSnack(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('action_not_implemented'.tr())),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('action_not_implemented'.tr())));
   }
 }
 
@@ -179,7 +188,11 @@ class _ParcelCard extends StatelessWidget {
           SizedBox(height: 10.h),
           Row(
             children: [
-              const Icon(Icons.scale_outlined, size: 16, color: Color(0xFF96A3B5)),
+              const Icon(
+                Icons.scale_outlined,
+                size: 16,
+                color: Color(0xFF96A3B5),
+              ),
               SizedBox(width: 4.w),
               Text(
                 item.weight,
@@ -222,7 +235,7 @@ class _ParcelCard extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      child: Text('action_drop_at_service_point'.tr()),
+                      child: Text(context.tr('action_pickup')),
                     ),
                   ),
                 ),
@@ -243,7 +256,7 @@ class _ParcelCard extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      child: Text('action_call_pickup'.tr()),
+                      child: Text(context.tr('action_forward')),
                     ),
                   ),
                 ),
@@ -304,7 +317,11 @@ class _EmptyState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(Icons.inventory_2_outlined, color: const Color(0xFFA2AFBF), size: 24.sp),
+          Icon(
+            Icons.inventory_2_outlined,
+            color: const Color(0xFFA2AFBF),
+            size: 24.sp,
+          ),
           SizedBox(height: 8.h),
           Text(
             message,
@@ -360,7 +377,8 @@ class _ParcelItem {
     if (query.isEmpty) {
       return true;
     }
-    return title.toLowerCase().contains(query) || trackNo.toLowerCase().contains(query);
+    return title.toLowerCase().contains(query) ||
+        trackNo.toLowerCase().contains(query);
   }
 
   static _ParcelStatusStyle _statusStyle(String status) {

@@ -11,41 +11,66 @@ class HistoryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final parcelsAsync = ref.watch(homeParcelsProvider);
 
-    return parcelsAsync.when(
-      data: (items) {
-        final historyItems = items
-            .where((item) => item.status == 'completed' || item.status == 'delivered')
-            .toList(growable: false);
-        if (historyItems.isEmpty) {
-          return Center(
-            child: Text(
-              'history_empty'.tr(),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          );
-        }
-        return ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: historyItems.length,
-          itemBuilder: (context, index) {
-            final item = historyItems[index];
-            return ListTile(
-              title: Text(item.title),
-              subtitle: Text('${item.trackingNo} • ${item.dateLabel}'),
-              trailing: Text(item.weightLabel),
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(homeParcelsProvider.future),
+      child: parcelsAsync.when(
+        data: (items) {
+          final historyItems = items
+              .where(
+                (item) =>
+                    item.status == 'completed' || item.status == 'delivered',
+              )
+              .toList(growable: false);
+          if (historyItems.isEmpty) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              children: [
+                SizedBox(height: MediaQuery.sizeOf(context).height * 0.28),
+                Center(
+                  child: Text(
+                    'history_empty'.tr(),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
             );
-          },
-          separatorBuilder: (_, __) => const Divider(height: 1),
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => Center(
-        child: TextButton(
-          onPressed: () => ref.invalidate(homeParcelsProvider),
-          child: Text('history_retry_loading'.tr()),
+          }
+          return ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            itemCount: historyItems.length,
+            itemBuilder: (context, index) {
+              final item = historyItems[index];
+              return ListTile(
+                title: Text(item.title),
+                subtitle: Text('${item.trackingNo} • ${item.dateLabel}'),
+                trailing: Text(item.weightLabel),
+              );
+            },
+            separatorBuilder: (context, index) => const Divider(height: 1),
+          );
+        },
+        loading: () => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 240),
+            Center(child: CircularProgressIndicator()),
+          ],
+        ),
+        error: (error, stackTrace) => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            const SizedBox(height: 240),
+            Center(
+              child: TextButton(
+                onPressed: () => ref.invalidate(homeParcelsProvider),
+                child: Text('history_retry_loading'.tr()),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
-

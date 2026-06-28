@@ -48,7 +48,9 @@ Widget _buildTestApp(Widget child) {
                       ),
                     ];
                   }),
-                  staffParcelRepositoryProvider.overrideWith((ref) => _FakeStaffParcelRepository()),
+                  staffParcelRepositoryProvider.overrideWith(
+                    (ref) => _FakeStaffParcelRepository(),
+                  ),
                 ],
                 child: Scaffold(body: child),
               ),
@@ -67,6 +69,7 @@ void main() {
     await tester.pumpWidget(_buildTestApp(const StaffReceiveScreen()));
     await tester.pumpAndSettle();
 
+    expect(find.byType(RefreshIndicator), findsOneWidget);
     expect(find.text('Sony WH-1000XM5 Headphones'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'unknown-track');
@@ -75,7 +78,9 @@ void main() {
     expect(find.text('No incoming parcels match your search'), findsOneWidget);
   });
 
-  testWidgets('tapping confirm inspection shows success or failure snackbar', (tester) async {
+  testWidgets('tapping confirm inspection shows success or failure snackbar', (
+    tester,
+  ) async {
     await tester.pumpWidget(_buildTestApp(const StaffReceiveScreen()));
     await tester.pumpAndSettle();
 
@@ -89,5 +94,3 @@ void main() {
     expect(find.byType(SnackBar), findsOneWidget);
   });
 }
-
-
