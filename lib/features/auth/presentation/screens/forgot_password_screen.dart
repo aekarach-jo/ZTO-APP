@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/custom_text_field.dart';
 import '../../../../shared/widgets/language_toggle_button.dart';
 import '../../../../shared/widgets/primary_button.dart';
+import '../../../../shared/widgets/app_brand_logo.dart';
 import '../../application/auth_provider.dart';
 import 'forgot_password_otp_screen.dart';
 
@@ -122,7 +123,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFFFFF3E8), Color(0xFFFFFFFF)],
+                  colors: [Color(0xFFEAF5FF), Color(0xFFFFFFFF)],
                 ),
               ),
             ),
@@ -145,28 +146,17 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                           ).backButtonTooltip,
                         ),
                         SizedBox(width: 4.w),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'QUICKPICK',
-                              style: TextStyle(
-                                color: Colors.black,
-                                fontSize: 22.sp,
-                                fontStyle: FontStyle.italic,
-                                fontWeight: FontWeight.w900,
-                                height: 1,
-                              ),
+                        SizedBox(
+                          width: 224.w,
+                          child: AppBrandLogo(
+                            width: double.infinity,
+                            height: 42.h,
+                            framed: true,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 10.w,
+                              vertical: 8.h,
                             ),
-                            Text(
-                              'brand_subtitle'.tr(),
-                              style: TextStyle(
-                                color: Colors.black.withValues(alpha: 0.8),
-                                fontSize: 12.sp,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                         const Spacer(),
                         const LanguageToggleButton(),
@@ -179,10 +169,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(24.r),
-                        border: Border.all(color: const Color(0xFFFFE4CF)),
+                        border: Border.all(color: const Color(0xFFD5E6FF)),
                         boxShadow: const [
                           BoxShadow(
-                            color: Color(0x14000000),
+                            color: Color(0x12084E9A),
                             blurRadius: 18,
                             offset: Offset(0, 8),
                           ),

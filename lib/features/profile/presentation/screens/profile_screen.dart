@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../home/data/home_parcel_repository.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -28,7 +29,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           Container(
             padding: EdgeInsets.fromLTRB(16.w, 18.h, 16.w, 26.h),
             decoration: BoxDecoration(
-              color: const Color(0xFFE9650E),
+              gradient: const LinearGradient(
+                colors: [AppTheme.brandBlueDark, AppTheme.brandBlueLight],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(40.r),
                 bottomRight: Radius.circular(40.r),
@@ -51,7 +56,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Text(
                   _ProfileTextKeys.userName.tr(),
                   style: TextStyle(
-                    color: Colors.black,
+                    color: Colors.white,
                     fontSize: 24.sp,
                     fontWeight: FontWeight.w800,
                   ),
@@ -60,7 +65,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Text(
                   _ProfileTextKeys.userEmail.tr(),
                   style: TextStyle(
-                    color: Colors.black.withValues(alpha: 0.9),
+                    color: Colors.white.withValues(alpha: 0.88),
                     fontSize: 15.sp,
                     fontWeight: FontWeight.w600,
                   ),
@@ -141,9 +146,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       _ProfileSummaryItem(
         titleKey: _ProfileTextKeys.summaryProcessing,
         value: grouped.processing.length.toString(),
-        valueColor: const Color(0xFFE9650E),
+        valueColor: AppTheme.brandBlueDark,
         icon: '📦',
-        iconBackgroundColor: const Color(0xFFF5EFE5),
+        iconBackgroundColor: const Color(0xFFE7F2FF),
       ),
       _ProfileSummaryItem(
         titleKey: _ProfileTextKeys.summaryReceived,
@@ -155,16 +160,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       _ProfileSummaryItem(
         titleKey: _ProfileTextKeys.summaryAtHome,
         value: grouped.atHome.length.toString(),
-        valueColor: const Color(0xFF8A38E4),
+        valueColor: AppTheme.brandBlue,
         icon: '🏡',
-        iconBackgroundColor: const Color(0xFFF0E8FD),
+        iconBackgroundColor: const Color(0xFFE8F3FF),
       ),
       _ProfileSummaryItem(
         titleKey: _ProfileTextKeys.summaryCompleted,
         value: grouped.completed.length.toString(),
-        valueColor: const Color(0xFF3A65E8),
+        valueColor: AppTheme.brandBlueLight,
         icon: '✅',
-        iconBackgroundColor: const Color(0xFFE7EFFB),
+        iconBackgroundColor: const Color(0xFFE7F4FF),
       ),
     ];
   }
@@ -343,13 +348,13 @@ class _ParcelCard extends StatelessWidget {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFBE7D4),
+                  color: const Color(0xFFEAF5FF),
                   borderRadius: BorderRadius.circular(14.r),
                 ),
                 child: Text(
                   item.weightLabel,
                   style: TextStyle(
-                    color: const Color(0xFFE9650E),
+                    color: AppTheme.brandBlueDark,
                     fontSize: 12.sp,
                     fontWeight: FontWeight.w800,
                   ),
@@ -427,7 +432,7 @@ class _LocationCard extends StatelessWidget {
                 child: Text(
                   _ProfileTextKeys.pinMapAction.tr(),
                   style: TextStyle(
-                    color: const Color(0xFFE9650E),
+                    color: AppTheme.brandBlueDark,
                     fontSize: 13.sp,
                     fontWeight: FontWeight.w800,
                   ),
@@ -460,7 +465,7 @@ class _LocationCard extends StatelessWidget {
               key: const ValueKey('profile-save-button'),
               onPressed: onSave,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
+                backgroundColor: AppTheme.brandBlueDark,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16.r),

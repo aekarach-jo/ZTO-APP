@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zto_app/core/notifications/current_fcm_token_provider.dart';
+import 'package:zto_app/core/network/network_providers.dart';
 import 'package:zto_app/features/auth/application/auth_provider.dart';
 import 'package:zto_app/features/auth/data/auth_repository.dart';
 
@@ -253,6 +254,59 @@ void main() {
 
     expect(success, isTrue);
     expect(trackingRepository.registeredFcmToken, 'fcm-123');
+  });
+
+  test('login success invalidates cached current user phone', () async {
+    var currentPhoneReads = 0;
+    final container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(const _FakeAuthRepository()),
+        currentUserPhoneProvider.overrideWith((ref) async {
+          currentPhoneReads += 1;
+          return currentPhoneReads == 1 ? '+8562011111111' : '+8562022222222';
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(
+      await container.read(currentUserPhoneProvider.future),
+      '+8562011111111',
+    );
+
+    final success = await container
+        .read(authProvider.notifier)
+        .login(phoneNumber: '+8562022222222', password: '12345678');
+
+    expect(success, isTrue);
+    expect(
+      await container.read(currentUserPhoneProvider.future),
+      '+8562022222222',
+    );
+  });
+
+  test('logout success invalidates cached current user phone', () async {
+    var currentPhoneReads = 0;
+    final container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(const _FakeAuthRepository()),
+        currentUserPhoneProvider.overrideWith((ref) async {
+          currentPhoneReads += 1;
+          return currentPhoneReads == 1 ? '+8562011111111' : null;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(
+      await container.read(currentUserPhoneProvider.future),
+      '+8562011111111',
+    );
+
+    final success = await container.read(authProvider.notifier).logout();
+
+    expect(success, isTrue);
+    expect(await container.read(currentUserPhoneProvider.future), isNull);
   });
 
   test('requestRegisterOtp maps 429 to otp_too_many_requests', () async {

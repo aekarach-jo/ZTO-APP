@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/parcel_response_parser.dart';
 import '../../../core/network/network_providers.dart';
 
 class SendParcelItem {
@@ -17,13 +18,25 @@ class SendParcelItem {
   final double? weightKg;
 
   factory SendParcelItem.fromJson(Map<String, dynamic> json) {
-    final tracking = _readString(json, const ['trackingNo', 'tracking_no', 'trackingNumber']) ?? '-';
+    final tracking =
+        _readString(json, const [
+          'trackingNo',
+          'tracking_no',
+          'trackingNumber',
+          'track_no',
+        ]) ??
+        '-';
     return SendParcelItem(
       id: _readString(json, const ['id', '_id', 'parcelId']) ?? tracking,
-      title: _readString(
-            json,
-            const ['title', 'itemName', 'productName', 'recipientName', 'description'],
-          ) ??
+      title:
+          _readString(json, const [
+            'name',
+            'title',
+            'itemName',
+            'productName',
+            'recipientName',
+            'description',
+          ]) ??
           tracking,
       trackNo: tracking.startsWith('#') ? tracking : '#$tracking',
       weightKg: _readNum(json, const ['weight']),
@@ -90,7 +103,10 @@ class SendRepository {
   Future<List<SendParcelItem>> fetchForwardableParcels() async {
     final response = await _dio.get<dynamic>('/parcels');
     final list = _extractList(response.data);
-    return list.whereType<Map<String, dynamic>>().map(SendParcelItem.fromJson).toList(growable: false);
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(SendParcelItem.fromJson)
+        .toList(growable: false);
   }
 
   Future<void> createForwardRequest(CreateForwardRequest request) async {
@@ -108,30 +124,35 @@ class SendRepository {
       },
     };
 
-    await _dio.post<dynamic>('/parcels/${request.parcelId}/forward', data: payload);
+    await _dio.post<dynamic>(
+      '/parcels/${request.parcelId}/forward',
+      data: payload,
+    );
   }
 
   List<dynamic> _extractList(dynamic data) {
-    if (data is List<dynamic>) {
-      return data;
+    return _flattenGroupedList(extractParcelPayloadList(data));
+  }
+
+  List<dynamic> _flattenGroupedList(List<dynamic> rawList) {
+    final flattened = <dynamic>[];
+
+    for (final item in rawList) {
+      if (item is! Map<String, dynamic>) {
+        flattened.add(item);
+        continue;
+      }
+
+      final nestedParcels = item['parcels'];
+      if (nestedParcels is! List<dynamic>) {
+        flattened.add(item);
+        continue;
+      }
+
+      flattened.addAll(nestedParcels.whereType<Map<String, dynamic>>());
     }
-    if (data is Map<String, dynamic>) {
-      final direct = data['data'];
-      if (direct is List<dynamic>) {
-        return direct;
-      }
-      if (direct is Map<String, dynamic>) {
-        final nested = direct['items'] ?? direct['parcels'] ?? direct['results'];
-        if (nested is List<dynamic>) {
-          return nested;
-        }
-      }
-      final root = data['items'] ?? data['parcels'] ?? data['results'];
-      if (root is List<dynamic>) {
-        return root;
-      }
-    }
-    return const <dynamic>[];
+
+    return flattened;
   }
 }
 
@@ -143,4 +164,3 @@ final sendRepositoryProvider = Provider<SendRepository>((ref) {
 final sendParcelsProvider = FutureProvider<List<SendParcelItem>>((ref) {
   return ref.watch(sendRepositoryProvider).fetchForwardableParcels();
 });
-

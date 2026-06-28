@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/models/auth_tokens.dart';
 import '../../../core/network/network_providers.dart';
+import '../../../core/network/storage/current_user_storage.dart';
 import '../../../core/network/storage/token_storage.dart';
 
 abstract class AuthRepository {
@@ -38,12 +39,17 @@ abstract class AuthRepository {
 }
 
 class ApiAuthRepository implements AuthRepository {
-  ApiAuthRepository({required Dio dio, required TokenStorage tokenStorage})
-    : _dio = dio,
-      _tokenStorage = tokenStorage;
+  ApiAuthRepository({
+    required Dio dio,
+    required TokenStorage tokenStorage,
+    required CurrentUserStorage currentUserStorage,
+  }) : _dio = dio,
+       _tokenStorage = tokenStorage,
+       _currentUserStorage = currentUserStorage;
 
   final Dio _dio;
   final TokenStorage _tokenStorage;
+  final CurrentUserStorage _currentUserStorage;
 
   @override
   Future<void> requestOtpForRegister({required String phoneNumber}) async {
@@ -113,6 +119,7 @@ class ApiAuthRepository implements AuthRepository {
 
     final tokens = _extractTokens(response.data);
     await _tokenStorage.save(tokens);
+    await _currentUserStorage.savePhoneNumber(phoneNumber);
   }
 
   @override
@@ -133,6 +140,7 @@ class ApiAuthRepository implements AuthRepository {
   Future<void> logout() async {
     await _dio.post<dynamic>('/auth/logout');
     await _tokenStorage.clear();
+    await _currentUserStorage.clear();
   }
 
   @override
@@ -149,6 +157,7 @@ class ApiAuthRepository implements AuthRepository {
 
     final extractedTokens = _extractTokens(response.data);
     await _tokenStorage.save(extractedTokens);
+    await _currentUserStorage.savePhoneNumber(phoneNumber);
   }
 
   AuthTokens _extractTokens(dynamic data) {
@@ -225,7 +234,12 @@ class ApiAuthRepository implements AuthRepository {
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final tokenStorage = ref.watch(tokenStorageProvider);
+  final currentUserStorage = ref.watch(currentUserStorageProvider);
 
   final dio = ref.watch(apiClientProvider).dio;
-  return ApiAuthRepository(dio: dio, tokenStorage: tokenStorage);
+  return ApiAuthRepository(
+    dio: dio,
+    tokenStorage: tokenStorage,
+    currentUserStorage: currentUserStorage,
+  );
 });

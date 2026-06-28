@@ -18,6 +18,7 @@ import '../../../send/presentation/screens/send_screen.dart';
 import '../../../staff/presentation/screens/staff_receive_screen.dart';
 import '../../../staff/presentation/screens/staff_scan_pay_screen.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/widgets/app_brand_logo.dart';
 
 class MainLayoutScreen extends ConsumerStatefulWidget {
   const MainLayoutScreen({super.key});
@@ -123,7 +124,7 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
         onTap: (index) => setState(() => _customerTabIndex = index),
         showSelectedLabels: false,
         showUnselectedLabels: false,
-        selectedItemColor: AppTheme.primaryOrange,
+        selectedItemColor: AppTheme.brandBlue,
         unselectedItemColor: const Color(0xFF778394),
         selectedLabelStyle: const TextStyle(
           fontWeight: FontWeight.w700,
@@ -174,7 +175,7 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
         onTap: (index) => setState(() => _staffTabIndex = index),
         showSelectedLabels: false,
         showUnselectedLabels: false,
-        selectedItemColor: AppTheme.primaryOrange,
+        selectedItemColor: AppTheme.brandBlue,
         unselectedItemColor: const Color(0xFF778394),
         selectedLabelStyle: const TextStyle(
           fontWeight: FontWeight.w700,
@@ -232,7 +233,7 @@ class _BottomNavItemContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? AppTheme.primaryOrange : const Color(0xFF778394);
+    final color = isSelected ? AppTheme.brandBlue : const Color(0xFF778394);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -278,37 +279,31 @@ class _MainTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: AppTheme.primaryOrange,
-      padding: EdgeInsets.fromLTRB(16.w, 6.h, 16.w, 14.h),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFE9F5FF), Color(0xFFBFE0FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 16.h),
       child: SafeArea(
         bottom: false,
         child: Row(
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+              child: Row(
                 children: [
-                  Text(
-                    'QUICKPICK',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 22.sp,
-                      fontStyle: FontStyle.italic,
-                      fontWeight: FontWeight.w900,
-                      height: 1,
-                    ),
-                  ),
-                  Text(
-                    'brand_subtitle'.tr(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.black.withValues(alpha: 0.85),
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w800,
+                  SizedBox(
+                    width: 224.w,
+                    child: AppBrandLogo(
+                      width: double.infinity,
+                      height: 42.h,
+                      framed: true,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 10.w,
+                        vertical: 8.h,
+                      ),
                     ),
                   ),
                 ],
@@ -319,15 +314,15 @@ class _MainTopBar extends StatelessWidget {
               height: 34.h,
               width: 34.h,
               decoration: BoxDecoration(
-                color: const Color(0xFF111111),
+                color: Colors.white.withValues(alpha: 0.92),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.18),
+                  color: Colors.white.withValues(alpha: 0.7),
                   width: 1,
                 ),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x30000000),
+                    color: Color(0x1A0A4B98),
                     blurRadius: 10,
                     offset: Offset(0, 3),
                   ),
@@ -340,7 +335,7 @@ class _MainTopBar extends StatelessWidget {
                 iconSize: 18.sp,
                 icon: Icon(
                   Icons.keyboard_arrow_down_rounded,
-                  color: Colors.white,
+                  color: AppTheme.brandBlueDark,
                   size: 18.sp,
                 ),
                 color: Colors.white,
@@ -356,16 +351,16 @@ class _MainTopBar extends StatelessWidget {
                   onLogout();
                 },
                 itemBuilder: (context) => [
-                  PopupMenuItem<_TopBarMenuAction>(
-                    key: const ValueKey('topbar-menu-switch-role'),
-                    value: _TopBarMenuAction.switchRole,
-                    child: Text(
-                      (isCustomer
-                              ? 'switch_branch'.tr()
-                              : 'switch_to_customer'.tr())
-                          .toUpperCase(),
-                    ),
-                  ),
+                  // PopupMenuItem<_TopBarMenuAction>(
+                  //   key: const ValueKey('topbar-menu-switch-role'),
+                  //   value: _TopBarMenuAction.switchRole,
+                  //   child: Text(
+                  //     (isCustomer
+                  //             ? 'switch_branch'.tr()
+                  //             : 'switch_to_customer'.tr())
+                  //         .toUpperCase(),
+                  //   ),
+                  // ),
                   PopupMenuItem<_TopBarMenuAction>(
                     key: const ValueKey('topbar-menu-switch-language'),
                     enabled: false,

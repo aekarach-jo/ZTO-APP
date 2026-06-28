@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/parcel_response_parser.dart';
 import '../../../core/network/network_providers.dart';
 
 class StaffParcelItem {
@@ -22,21 +23,41 @@ class StaffParcelItem {
   final String status;
 
   factory StaffParcelItem.fromJson(Map<String, dynamic> json) {
-    final tracking = _readString(json, const ['trackingNo', 'tracking_no', 'trackingNumber']) ?? '-';
-    final weight = _readString(json, const ['weightLabel']) ?? _readNum(json, const ['weight'])?.toString();
+    final tracking =
+        _readString(json, const [
+          'trackingNo',
+          'tracking_no',
+          'trackingNumber',
+          'track_no',
+        ]) ??
+        '-';
+    final weight =
+        _readString(json, const ['weightLabel']) ??
+        _readNum(json, const ['weight'])?.toString();
     return StaffParcelItem(
       id: _readString(json, const ['id', '_id', 'parcelId']) ?? tracking,
-      title: _readString(
-            json,
-            const ['title', 'itemName', 'productName', 'recipientName', 'description'],
-          ) ??
+      title:
+          _readString(json, const [
+            'name',
+            'title',
+            'itemName',
+            'productName',
+            'recipientName',
+            'description',
+          ]) ??
           tracking,
       trackNo: tracking.startsWith('#') ? tracking : '#$tracking',
       weightLabel: (weight == null || weight.isEmpty) ? '-' : '$weight kg',
       dateLabel: _formatDate(
-        _readString(json, const ['createdAt', 'created_at', 'updatedAt', 'updated_at']),
+        _readString(json, const [
+          'createdAt',
+          'created_at',
+          'updatedAt',
+          'updated_at',
+        ]),
       ),
-      status: (_readString(json, const ['status', 'parcelStatus']) ?? 'pending').toLowerCase(),
+      status: (_readString(json, const ['status', 'parcelStatus']) ?? 'pending')
+          .toLowerCase(),
     );
   }
 
@@ -83,7 +104,8 @@ class StaffParcelItem {
       return true;
     }
     final lower = query.toLowerCase();
-    return title.toLowerCase().contains(lower) || trackNo.toLowerCase().contains(lower);
+    return title.toLowerCase().contains(lower) ||
+        trackNo.toLowerCase().contains(lower);
   }
 }
 
@@ -138,7 +160,10 @@ class StaffParcelRepository {
   Future<List<StaffParcelItem>> fetchParcels() async {
     final response = await _dio.get<dynamic>('/parcels');
     final list = _extractList(response.data);
-    return list.whereType<Map<String, dynamic>>().map(StaffParcelItem.fromJson).toList(growable: false);
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(StaffParcelItem.fromJson)
+        .toList(growable: false);
   }
 
   Future<void> markInspected(String parcelId) async {
@@ -146,7 +171,10 @@ class StaffParcelRepository {
       await _dio.post<dynamic>('/staff/parcels/$parcelId/inspect');
       return;
     } on DioException {
-      await _dio.patch<dynamic>('/parcels/$parcelId', data: {'status': 'ready_to_ship'});
+      await _dio.patch<dynamic>(
+        '/parcels/$parcelId',
+        data: {'status': 'ready_to_ship'},
+      );
     }
   }
 
@@ -155,31 +183,36 @@ class StaffParcelRepository {
       await _dio.post<dynamic>('/staff/parcels/$parcelId/handover');
       return;
     } on DioException {
-      await _dio.patch<dynamic>('/parcels/$parcelId', data: {'status': 'picked_up'});
+      await _dio.patch<dynamic>(
+        '/parcels/$parcelId',
+        data: {'status': 'picked_up'},
+      );
     }
   }
 
   List<dynamic> _extractList(dynamic data) {
-    if (data is List<dynamic>) {
-      return data;
+    return _flattenGroupedList(extractParcelPayloadList(data));
+  }
+
+  List<dynamic> _flattenGroupedList(List<dynamic> rawList) {
+    final flattened = <dynamic>[];
+
+    for (final item in rawList) {
+      if (item is! Map<String, dynamic>) {
+        flattened.add(item);
+        continue;
+      }
+
+      final nestedParcels = item['parcels'];
+      if (nestedParcels is! List<dynamic>) {
+        flattened.add(item);
+        continue;
+      }
+
+      flattened.addAll(nestedParcels.whereType<Map<String, dynamic>>());
     }
-    if (data is Map<String, dynamic>) {
-      final direct = data['data'];
-      if (direct is List<dynamic>) {
-        return direct;
-      }
-      if (direct is Map<String, dynamic>) {
-        final nested = direct['items'] ?? direct['parcels'] ?? direct['results'];
-        if (nested is List<dynamic>) {
-          return nested;
-        }
-      }
-      final root = data['items'] ?? data['parcels'] ?? data['results'];
-      if (root is List<dynamic>) {
-        return root;
-      }
-    }
-    return const <dynamic>[];
+
+    return flattened;
   }
 }
 
@@ -192,10 +225,11 @@ final staffParcelsProvider = FutureProvider<List<StaffParcelItem>>((ref) {
   return ref.watch(staffParcelRepositoryProvider).fetchParcels();
 });
 
-final handoverReadyParcelsProvider = FutureProvider<List<StaffParcelItem>>((ref) async {
+final handoverReadyParcelsProvider = FutureProvider<List<StaffParcelItem>>((
+  ref,
+) async {
   final items = await ref.watch(staffParcelRepositoryProvider).fetchParcels();
   return items
       .where((item) => item.status == 'ready_to_ship' || item.status == 'ready')
       .toList(growable: false);
 });
-

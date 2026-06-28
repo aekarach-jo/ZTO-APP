@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/parcel_response_parser.dart';
 import '../../../core/network/network_providers.dart';
 
 class HomeParcel {
@@ -20,37 +21,51 @@ class HomeParcel {
   final String dateLabel;
   final String status;
 
-  factory HomeParcel.fromJson(Map<String, dynamic> json) {
-    final trackingNo = _readString(
-          json,
-          const ['trackingNo', 'tracking_no', 'trackingNumber'],
-        ) ??
+  factory HomeParcel.fromJson(
+    Map<String, dynamic> json, {
+    String? inheritedDateRaw,
+  }) {
+    final trackingNo =
+        _readString(json, const [
+          'trackingNo',
+          'tracking_no',
+          'trackingNumber',
+        ]) ??
+        _readString(json, const ['track_no']) ??
         '-';
 
     final id = _readString(json, const ['id', '_id', 'parcelId']) ?? trackingNo;
-    final title = _readString(
-          json,
-          const [
-            'title',
-            'itemName',
-            'productName',
-            'recipientName',
-            'description',
-          ],
-        ) ??
+    final title =
+        _readString(json, const [
+          'name',
+          'title',
+          'itemName',
+          'productName',
+          'recipientName',
+          'description',
+        ]) ??
         trackingNo;
 
-    final status = _readString(json, const ['status', 'parcelStatus']) ?? 'pending';
+    final status =
+        _readString(json, const ['status', 'parcelStatus']) ?? 'pending';
 
     final weightRaw =
-        _readString(json, const ['weightLabel']) ?? _readNumberAsString(json, const ['weight']);
-    final weightLabel = weightRaw == null || weightRaw.isEmpty ? '-' : '$weightRaw kg';
+        _readString(json, const ['weightLabel']) ??
+        _readNumberAsString(json, const ['weight']);
+    final weightLabel = weightRaw == null || weightRaw.isEmpty
+        ? '-'
+        : '$weightRaw kg';
 
-    final dateRaw = _readString(
-      json,
-      const ['dateLabel', 'createdAt', 'created_at', 'updatedAt', 'updated_at'],
-    );
-    final dateLabel = _formatDateLabel(dateRaw);
+    final dateRaw = _readString(json, const [
+      'dateLabel',
+      'incoming_at',
+      'incoming_at_str',
+      'createdAt',
+      'created_at',
+      'updatedAt',
+      'updated_at',
+    ]);
+    final dateLabel = _formatDateLabel(dateRaw ?? inheritedDateRaw);
 
     return HomeParcel(
       id: id,
@@ -76,7 +91,10 @@ class HomeParcel {
     return null;
   }
 
-  static String? _readNumberAsString(Map<String, dynamic> json, List<String> keys) {
+  static String? _readNumberAsString(
+    Map<String, dynamic> json,
+    List<String> keys,
+  ) {
     for (final key in keys) {
       final value = json[key];
       if (value is num) {
@@ -113,35 +131,48 @@ class HomeParcelRepository {
     final response = await _dio.get<dynamic>('/parcels');
     final list = _extractList(response.data);
     return list
-        .whereType<Map<String, dynamic>>()
-        .map(HomeParcel.fromJson)
+        .map((item) {
+          if (item is HomeParcel) {
+            return item;
+          }
+          if (item is Map<String, dynamic>) {
+            return HomeParcel.fromJson(item);
+          }
+          return null;
+        })
+        .whereType<HomeParcel>()
         .toList(growable: false);
   }
 
   List<dynamic> _extractList(dynamic data) {
-    if (data is List<dynamic>) {
-      return data;
+    return _flattenGroupedList(extractParcelPayloadList(data));
+  }
+
+  List<dynamic> _flattenGroupedList(List<dynamic> rawList) {
+    final flattened = <dynamic>[];
+
+    for (final item in rawList) {
+      if (item is! Map<String, dynamic>) {
+        flattened.add(item);
+        continue;
+      }
+
+      final nestedParcels = item['parcels'];
+      if (nestedParcels is! List<dynamic>) {
+        flattened.add(item);
+        continue;
+      }
+
+      final inheritedDate = (item['incoming_at'] ?? item['incoming_at_str'])
+          ?.toString();
+      for (final parcel in nestedParcels.whereType<Map<String, dynamic>>()) {
+        flattened.add(
+          HomeParcel.fromJson(parcel, inheritedDateRaw: inheritedDate),
+        );
+      }
     }
 
-    if (data is Map<String, dynamic>) {
-      final direct = data['data'];
-      if (direct is List<dynamic>) {
-        return direct;
-      }
-      if (direct is Map<String, dynamic>) {
-        final nested = direct['items'] ?? direct['parcels'] ?? direct['results'];
-        if (nested is List<dynamic>) {
-          return nested;
-        }
-      }
-
-      final root = data['items'] ?? data['parcels'] ?? data['results'];
-      if (root is List<dynamic>) {
-        return root;
-      }
-    }
-
-    return const <dynamic>[];
+    return flattened;
   }
 }
 
@@ -153,4 +184,3 @@ final homeParcelRepositoryProvider = Provider<HomeParcelRepository>((ref) {
 final homeParcelsProvider = FutureProvider<List<HomeParcel>>((ref) {
   return ref.watch(homeParcelRepositoryProvider).fetchMyParcels();
 });
-

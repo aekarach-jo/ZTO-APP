@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../data/notification_repository.dart';
 
 class NotificationsScreen extends ConsumerWidget {
@@ -196,7 +197,7 @@ class _NotificationCard extends StatelessWidget {
                   width: 10.w,
                   height: 10.w,
                   decoration: const BoxDecoration(
-                    color: Color(0xFFE9650E),
+                    color: AppTheme.brandBlue,
                     shape: BoxShape.circle,
                   ),
                 ),

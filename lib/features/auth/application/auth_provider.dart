@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/notifications/current_fcm_token_provider.dart';
+import '../../../core/network/network_providers.dart';
 import '../data/auth_repository.dart';
 
 enum UserRole { customer, staff }
@@ -42,11 +44,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(
     this._authRepository, {
     required String? Function() readCurrentFcmToken,
+    required VoidCallback onSessionDataChanged,
   }) : _readCurrentFcmToken = readCurrentFcmToken,
+       _onSessionDataChanged = onSessionDataChanged,
        super(const AuthState());
 
   final AuthRepository _authRepository;
   final String? Function() _readCurrentFcmToken;
+  final VoidCallback _onSessionDataChanged;
   static final RegExp _phoneRegex = RegExp(r'^\+?[0-9]{8,15}$');
   static final RegExp _forgotPasswordPhoneRegex = RegExp(
     r'^\+856(?:20|30)[0-9]{8}$',
@@ -100,6 +105,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         phoneNumber: phoneNumber,
         password: password,
       );
+      _onSessionDataChanged();
       final fcmToken = _readCurrentFcmToken();
       if (fcmToken != null && fcmToken.isNotEmpty) {
         unawaited(_authRepository.registerFcmToken(fcmToken: fcmToken));
@@ -277,6 +283,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         password: password,
         otp: otp,
       );
+      _onSessionDataChanged();
       final fcmToken = _readCurrentFcmToken();
       if (fcmToken != null && fcmToken.isNotEmpty) {
         unawaited(_authRepository.registerFcmToken(fcmToken: fcmToken));
@@ -446,6 +453,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     try {
       await _authRepository.logout();
+      _onSessionDataChanged();
       state = state.copyWith(
         isLoading: false,
         role: UserRole.customer,
@@ -464,5 +472,9 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier(
     authRepository,
     readCurrentFcmToken: () => ref.read(currentFcmTokenProvider),
+    onSessionDataChanged: () {
+      ref.invalidate(currentUserPhoneProvider);
+      ref.invalidate(authTokensProvider);
+    },
   );
 });

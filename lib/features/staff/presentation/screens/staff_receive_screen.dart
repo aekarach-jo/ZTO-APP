@@ -163,12 +163,11 @@ class _StaffReceiveScreenState extends ConsumerState<StaffReceiveScreen> {
         SnackBar(content: Text('staff_receive_update_failed'.tr())),
       );
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
       }
-      setState(() {
-        _isSubmitting = false;
-      });
     }
   }
 }

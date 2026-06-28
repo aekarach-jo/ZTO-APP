@@ -2,8 +2,11 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../data/home_parcel_repository.dart';
+import '../../../parcel_claim/presentation/screens/parcel_claim_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -41,6 +44,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           SizedBox(height: 12.h),
+          _ClaimEntryCard(
+            onTap: () => context.push(ParcelClaimScreen.routePath),
+          ),
+          SizedBox(height: 12.h),
           _SearchBar(
             controller: _searchController,
             hint: 'search_parcel_or_item'.tr(),
@@ -55,6 +62,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               final filteredParcels = parcels
                   .where((item) => item.matches(query))
                   .toList();
+              final groupedParcels = _ParcelGroup.group(filteredParcels);
 
               if (filteredParcels.isEmpty) {
                 return _EmptyState(message: 'no_parcel_found'.tr());
@@ -62,13 +70,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
               return Column(
                 children: [
-                  for (var i = 0; i < filteredParcels.length; i++) ...[
-                    _ParcelCard(
-                      item: filteredParcels[i],
+                  for (
+                    var groupIndex = 0;
+                    groupIndex < groupedParcels.length;
+                    groupIndex++
+                  ) ...[
+                    _DateSectionHeader(
+                      label: groupedParcels[groupIndex].dateLabel,
+                    ),
+                    SizedBox(height: 10.h),
+                    _ParcelGroupCard(
+                      cardKey: ValueKey('home-parcel-group-card-$groupIndex'),
+                      items: groupedParcels[groupIndex].items,
                       onDropAtPoint: () => _showNotImplementedSnack(context),
                       onCallPickup: () => _showNotImplementedSnack(context),
                     ),
-                    if (i != filteredParcels.length - 1) SizedBox(height: 14.h),
+                    if (groupIndex != groupedParcels.length - 1)
+                      SizedBox(height: 18.h),
                   ],
                 ],
               );
@@ -86,6 +104,71 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('action_not_implemented'.tr())));
+  }
+}
+
+class _ClaimEntryCard extends StatelessWidget {
+  const _ClaimEntryCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: const ValueKey('home-claim-entry-card'),
+      borderRadius: BorderRadius.circular(20.r),
+      onTap: onTap,
+      child: Ink(
+        padding: EdgeInsets.all(16.w),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppTheme.brandBlueDark, AppTheme.brandBlueLight],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44.w,
+              height: 44.w,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(14.r),
+              ),
+              child: const Icon(Icons.search, color: Colors.white),
+            ),
+            SizedBox(width: 12.w),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'parcel_claim_entry_title'.tr(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17.sp,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(height: 4.h),
+                  Text(
+                    'parcel_claim_entry_subtitle'.tr(),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.white),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -128,8 +211,75 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
-class _ParcelCard extends StatelessWidget {
-  const _ParcelCard({
+class _DateSectionHeader extends StatelessWidget {
+  const _DateSectionHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: const Color(0xFF49576A),
+            fontSize: 14.sp,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        SizedBox(width: 10.w),
+        Expanded(child: Container(height: 1, color: const Color(0xFFE0E6EF))),
+      ],
+    );
+  }
+}
+
+class _ParcelGroupCard extends StatelessWidget {
+  const _ParcelGroupCard({
+    required this.cardKey,
+    required this.items,
+    required this.onDropAtPoint,
+    required this.onCallPickup,
+  });
+
+  final Key cardKey;
+  final List<_ParcelItem> items;
+  final VoidCallback onDropAtPoint;
+  final VoidCallback onCallPickup;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: cardKey,
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20.r),
+        border: Border.all(color: const Color(0xFFE2E7EF)),
+      ),
+      child: Column(
+        children: [
+          for (var index = 0; index < items.length; index++) ...[
+            _ParcelListItem(
+              item: items[index],
+              onDropAtPoint: onDropAtPoint,
+              onCallPickup: onCallPickup,
+            ),
+            if (index != items.length - 1) ...[
+              SizedBox(height: 14.h),
+              Divider(height: 1, color: const Color(0xFFE8EEF6)),
+              SizedBox(height: 14.h),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ParcelListItem extends StatelessWidget {
+  const _ParcelListItem({
     required this.item,
     required this.onDropAtPoint,
     required this.onCallPickup,
@@ -141,130 +291,122 @@ class _ParcelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(16.w),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: const Color(0xFFE2E7EF)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      style: TextStyle(
-                        fontSize: 19.sp,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF161616),
-                      ),
-                    ),
-                    SizedBox(height: 4.h),
-                    Text(
-                      item.trackNo,
-                      style: TextStyle(
-                        color: const Color(0xFF9AA7B8),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14.sp,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _StatusChip(
-                label: item.statusKey.tr(),
-                backgroundColor: item.statusBackgroundColor,
-                foregroundColor: item.statusForegroundColor,
-              ),
-            ],
-          ),
-          SizedBox(height: 10.h),
-          Row(
-            children: [
-              const Icon(
-                Icons.scale_outlined,
-                size: 16,
-                color: Color(0xFF96A3B5),
-              ),
-              SizedBox(width: 4.w),
-              Text(
-                item.weight,
-                style: TextStyle(
-                  color: const Color(0xFF95A2B3),
-                  fontSize: 13.sp,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              SizedBox(width: 14.w),
-              const Icon(Icons.access_time, size: 16, color: Color(0xFF96A3B5)),
-              SizedBox(width: 4.w),
-              Text(
-                item.date,
-                style: TextStyle(
-                  color: const Color(0xFF95A2B3),
-                  fontSize: 13.sp,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          if (item.showActions) ...[
-            SizedBox(height: 16.h),
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 50.h,
-                    child: ElevatedButton(
-                      onPressed: onDropAtPoint,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1CAB4D),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16.r),
-                        ),
-                        textStyle: TextStyle(
-                          fontSize: 14.sp,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      child: Text(context.tr('action_pickup')),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    style: TextStyle(
+                      fontSize: 19.sp,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF161616),
                     ),
                   ),
-                ),
-                SizedBox(width: 12.w),
-                Expanded(
-                  child: SizedBox(
-                    height: 50.h,
-                    child: ElevatedButton(
-                      onPressed: onCallPickup,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFE9650E),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16.r),
-                        ),
-                        textStyle: TextStyle(
-                          fontSize: 14.sp,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      child: Text(context.tr('action_forward')),
+                  SizedBox(height: 4.h),
+                  Text(
+                    item.trackNo,
+                    style: TextStyle(
+                      color: const Color(0xFF9AA7B8),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14.sp,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
+            ),
+            _StatusChip(
+              label: item.statusKey.tr(),
+              backgroundColor: item.statusBackgroundColor,
+              foregroundColor: item.statusForegroundColor,
             ),
           ],
+        ),
+        SizedBox(height: 10.h),
+        Row(
+          children: [
+            const Icon(
+              Icons.scale_outlined,
+              size: 16,
+              color: Color(0xFF96A3B5),
+            ),
+            SizedBox(width: 4.w),
+            Text(
+              item.weight,
+              style: TextStyle(
+                color: const Color(0xFF95A2B3),
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(width: 14.w),
+            const Icon(Icons.access_time, size: 16, color: Color(0xFF96A3B5)),
+            SizedBox(width: 4.w),
+            Text(
+              item.date,
+              style: TextStyle(
+                color: const Color(0xFF95A2B3),
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        if (item.showActions) ...[
+          SizedBox(height: 16.h),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 50.h,
+                  child: ElevatedButton(
+                    onPressed: onDropAtPoint,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.brandBlueDark,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16.r),
+                      ),
+                      textStyle: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    child: Text(context.tr('action_pickup')),
+                  ),
+                ),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: SizedBox(
+                  height: 50.h,
+                  child: ElevatedButton(
+                    onPressed: onCallPickup,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.brandBlue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16.r),
+                      ),
+                      textStyle: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    child: Text(context.tr('action_forward')),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -384,6 +526,12 @@ class _ParcelItem {
   static _ParcelStatusStyle _statusStyle(String status) {
     switch (status) {
       case 'ready':
+        return const _ParcelStatusStyle(
+          statusKey: 'status_ready',
+          backgroundColor: Color(0xFFDDF6E7),
+          foregroundColor: Color(0xFF198754),
+          showActions: true,
+        );
       case 'ready_to_ship':
         return const _ParcelStatusStyle(
           statusKey: 'status_ready_to_ship',
@@ -398,9 +546,20 @@ class _ParcelItem {
           backgroundColor: Color(0xFFEDF1F5),
           foregroundColor: Color(0xFF6F8196),
         );
+      case 'wait_import':
+        return const _ParcelStatusStyle(
+          statusKey: 'status_wait_import',
+          backgroundColor: Color(0xFFEDF1F5),
+          foregroundColor: Color(0xFF6F8196),
+        );
       case 'arrived':
       case 'picked_up':
       case 'pending':
+        return const _ParcelStatusStyle(
+          statusKey: 'status_pending',
+          backgroundColor: Color(0xFFFDF0A6),
+          foregroundColor: Color(0xFF8D7000),
+        );
       case 'waiting_inspection':
       default:
         return const _ParcelStatusStyle(
@@ -424,4 +583,28 @@ class _ParcelStatusStyle {
   final Color backgroundColor;
   final Color foregroundColor;
   final bool showActions;
+}
+
+class _ParcelGroup {
+  const _ParcelGroup({required this.dateLabel, required this.items});
+
+  final String dateLabel;
+  final List<_ParcelItem> items;
+
+  static List<_ParcelGroup> group(List<_ParcelItem> items) {
+    final grouped = <_ParcelGroup>[];
+
+    for (final item in items) {
+      if (grouped.isNotEmpty && grouped.last.dateLabel == item.date) {
+        grouped.last.items.add(item);
+        continue;
+      }
+
+      grouped.add(
+        _ParcelGroup(dateLabel: item.date, items: <_ParcelItem>[item]),
+      );
+    }
+
+    return grouped;
+  }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../data/staff_parcel_repository.dart';
 
 class StaffScanPayScreen extends ConsumerStatefulWidget {
@@ -136,12 +137,11 @@ class _StaffScanPayScreenState extends ConsumerState<StaffScanPayScreen> {
         SnackBar(content: Text('staff_scan_pay_confirm_failed'.tr())),
       );
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _submittingParcelId = null;
+        });
       }
-      setState(() {
-        _submittingParcelId = null;
-      });
     }
   }
 }
@@ -212,7 +212,7 @@ class _ScannerCard extends StatelessWidget {
                 width: 234.w,
                 height: 255.h,
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFE9650E), width: 3),
+                  border: Border.all(color: AppTheme.brandBlue, width: 3),
                   borderRadius: BorderRadius.circular(12.r),
                 ),
                 child: isCameraGranted
@@ -273,10 +273,10 @@ class _ScannerCard extends StatelessWidget {
               child: Container(
                 height: 3.h,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE9650E).withValues(alpha: 0.85),
+                  color: AppTheme.brandBlue.withValues(alpha: 0.85),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFE9650E).withValues(alpha: 0.6),
+                      color: AppTheme.brandBlue.withValues(alpha: 0.6),
                       blurRadius: 14,
                     ),
                   ],

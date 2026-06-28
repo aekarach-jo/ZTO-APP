@@ -8,6 +8,7 @@ import '../../features/auth/presentation/screens/register_otp_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/reset_password_screen.dart';
 import '../../features/main_layout/presentation/screens/main_layout_screen.dart';
+import '../../features/parcel_claim/presentation/screens/parcel_claim_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -67,6 +68,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: MainLayoutScreen.routePath,
         builder: (context, state) => const MainLayoutScreen(),
+      ),
+      GoRoute(
+        path: ParcelClaimScreen.routePath,
+        builder: (context, state) => const ParcelClaimScreen(),
       ),
     ],
   );

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../data/send_repository.dart';
 import '../../../main_layout/application/main_layout_navigation_provider.dart';
 
@@ -342,7 +343,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                       children: [
                         Icon(
                           Icons.location_on,
-                          color: const Color(0xFFD64B3B),
+                          color: AppTheme.brandBlueDark,
                           size: 16.sp,
                         ),
                         SizedBox(width: 6.w),
@@ -478,7 +479,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               Text(
                 _SendTextKeys.paymentWeightSize.tr(args: ['k', 'k']),
                 style: TextStyle(
-                  color: const Color(0xFFE9650E),
+                  color: AppTheme.brandBlue,
                   fontSize: 14.sp,
                   fontWeight: FontWeight.w800,
                 ),
@@ -645,12 +646,11 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         SnackBar(content: Text(_SendTextKeys.submitForwardError.tr())),
       );
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
       }
-      setState(() {
-        _isSubmitting = false;
-      });
     }
   }
 
@@ -729,9 +729,7 @@ class _SendParcelCard extends StatelessWidget {
             ),
             Icon(
               selected ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: selected
-                  ? const Color(0xFFE9650E)
-                  : const Color(0xFFD4DCE8),
+              color: selected ? AppTheme.brandBlue : const Color(0xFFD4DCE8),
               size: 22.sp,
             ),
           ],
@@ -765,9 +763,11 @@ class _Header extends StatelessWidget {
         Expanded(
           child: Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: const Color(0xFF111111),
-              fontSize: 26.sp,
+              fontSize: 22.sp,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -787,9 +787,9 @@ class _SelectedParcelSummary extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
       decoration: BoxDecoration(
-        color: const Color(0xFFF6EFE5),
+        color: const Color(0xFFEAF5FF),
         borderRadius: BorderRadius.circular(18.r),
-        border: Border.all(color: const Color(0xFFF2DEBD)),
+        border: Border.all(color: AppTheme.borderBlue),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -797,7 +797,7 @@ class _SelectedParcelSummary extends StatelessWidget {
           Icon(
             Icons.inventory_2_rounded,
             size: 20.sp,
-            color: const Color(0xFFAE7D39),
+            color: AppTheme.brandBlueDark,
           ),
           SizedBox(width: 10.w),
           Expanded(
@@ -807,7 +807,7 @@ class _SelectedParcelSummary extends StatelessWidget {
                 Text(
                   _SendTextKeys.selectedParcelLabel.tr(),
                   style: TextStyle(
-                    color: const Color(0xFFCE7925),
+                    color: AppTheme.brandBlue,
                     fontSize: 12.sp,
                     fontWeight: FontWeight.w700,
                   ),
@@ -816,7 +816,7 @@ class _SelectedParcelSummary extends StatelessWidget {
                 Text(
                   item.title,
                   style: TextStyle(
-                    color: const Color(0xFF9E5511),
+                    color: AppTheme.brandBlueDark,
                     fontSize: 16.sp,
                     fontWeight: FontWeight.w800,
                   ),
@@ -916,8 +916,10 @@ class _PrimaryActionButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: enabled ? onPressed : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: enabled ? Colors.black : const Color(0xFF949494),
-          disabledBackgroundColor: const Color(0xFF949494),
+          backgroundColor: enabled
+              ? AppTheme.brandBlueDark
+              : const Color(0xFF9FC9F7),
+          disabledBackgroundColor: const Color(0xFF9FC9F7),
           foregroundColor: Colors.white,
           disabledForegroundColor: Colors.white,
           elevation: 0,
@@ -985,9 +987,7 @@ class _PriceRow extends StatelessWidget {
         Text(
           amount,
           style: TextStyle(
-            color: highlight
-                ? const Color(0xFFE9650E)
-                : const Color(0xFF101010),
+            color: highlight ? AppTheme.brandBlueDark : const Color(0xFF101010),
             fontSize: highlight ? 32.sp : (smallValue ? 20.sp : 24.sp),
             fontWeight: FontWeight.w800,
           ),
@@ -1020,7 +1020,7 @@ class _PaymentMethodCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16.r),
           border: Border.all(
-            color: selected ? const Color(0xFFE9650E) : const Color(0xFFDDE4EE),
+            color: selected ? AppTheme.brandBlue : const Color(0xFFDDE4EE),
             width: selected ? 1.4 : 1,
           ),
         ),
@@ -1070,9 +1070,7 @@ class _PaymentMethodCard extends StatelessWidget {
             ),
             Icon(
               selected ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: selected
-                  ? const Color(0xFFE9650E)
-                  : const Color(0xFFD3DBE7),
+              color: selected ? AppTheme.brandBlue : const Color(0xFFD3DBE7),
               size: 22.sp,
             ),
           ],

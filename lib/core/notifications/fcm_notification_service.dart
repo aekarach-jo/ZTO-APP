@@ -16,9 +16,9 @@ import '../router/app_router.dart';
 const AndroidNotificationChannel _ztoNotificationChannel =
     AndroidNotificationChannel(
       'zto_push_notifications',
-      'ZTO Push Notifications',
+      'CLS Global Notifications',
       description:
-          'Notifications about parcels, account updates, and ZTO alerts.',
+          'Notifications about parcels, account updates, and CLS Global alerts.',
       importance: Importance.high,
     );
 
@@ -158,7 +158,7 @@ class FcmNotificationService {
   void _handleNotificationOpened(RemoteMessage message) {
     _logRemoteMessage('Notification opened', message);
     _refreshFcmRelatedData();
-    _ref.read(customerTabJumpTargetProvider.notifier).state = 2;
+    _ref.read(customerTabJumpTargetProvider.notifier).state = 0;
     _ref.read(appRouterProvider).go(MainLayoutScreen.routePath);
   }
 
@@ -182,7 +182,9 @@ final fcmNotificationBootstrapProvider = FutureProvider<void>((ref) async {
 Future<void> _showLocalNotification(RemoteMessage message) async {
   final notification = message.notification;
   final title =
-      notification?.title ?? _readDataString(message.data, 'title') ?? 'ZTO';
+      notification?.title ??
+      _readDataString(message.data, 'title') ??
+      'CLS Global';
   final body =
       notification?.body ??
       _readDataString(message.data, 'body') ??

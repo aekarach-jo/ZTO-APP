@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../data/contact_repository.dart';
 
 class ContactScreen extends ConsumerStatefulWidget {
@@ -30,7 +31,7 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
     final threadAsync = ref.watch(contactThreadProvider);
 
     return Container(
-      color: const Color(0xFFF1F3F7),
+      color: AppTheme.lightBackground,
       child: Column(
         children: [
           Expanded(
@@ -109,7 +110,7 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                         filled: true,
-                        fillColor: const Color(0xFFECEFF4),
+                        fillColor: const Color(0xFFEAF4FF),
                         contentPadding: EdgeInsets.symmetric(
                           horizontal: 16.w,
                           vertical: 16.h,
@@ -129,7 +130,7 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
                       key: const ValueKey('contact-send-button'),
                       onPressed: _isSending ? null : _sendMessage,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFE9650E),
+                        backgroundColor: AppTheme.brandBlue,
                         foregroundColor: Colors.white,
                         padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
@@ -230,7 +231,7 @@ class _ChatBubble extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
           decoration: BoxDecoration(
-            color: isAgent ? const Color(0xFFEEF2FA) : const Color(0xFFE9650E),
+            color: isAgent ? const Color(0xFFEAF4FF) : AppTheme.brandBlue,
             borderRadius: BorderRadius.only(
               topLeft: radius,
               topRight: radius,
