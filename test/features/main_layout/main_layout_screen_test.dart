@@ -1,9 +1,16 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zto_app/core/network/models/auth_tokens.dart';
+import 'package:zto_app/core/network/network_providers.dart';
+import 'package:zto_app/core/network/storage/token_storage.dart';
+import 'package:zto_app/features/branch/data/branch_repository.dart';
+import 'package:zto_app/features/contact/data/chat_socket_service.dart';
 import 'package:zto_app/features/contact/data/contact_repository.dart';
 import 'package:zto_app/features/home/data/home_parcel_repository.dart';
 import 'package:zto_app/features/notifications/data/notification_repository.dart';
@@ -88,13 +95,63 @@ class _FakeContactRepository extends ContactRepository {
   _FakeContactRepository() : super(dio: Dio());
 
   @override
-  Future<List<ContactMessage>> fetchMessages() async {
-    return const [];
-  }
+  Future<String> resolveRoomId() async => 'branch-1-user-2';
 
   @override
-  Future<List<ContactMessage>> sendMessage({required String text}) async {
-    return [];
+  Future<List<ContactMessage>> fetchMessages(String roomId) async {
+    return const [];
+  }
+}
+
+class _FakeTokenStorage implements TokenStorage {
+  @override
+  Future<AuthTokens?> read() async =>
+      const AuthTokens(accessToken: 'test-token', refreshToken: 'r');
+
+  @override
+  Future<void> save(AuthTokens tokens) async {}
+
+  @override
+  Future<void> clear() async {}
+}
+
+class _NoopChatSocket implements ChatSocket {
+  final _messages = StreamController<Map<String, dynamic>>.broadcast();
+  final _errors = StreamController<String>.broadcast();
+  final _status = StreamController<ChatSocketStatus>.broadcast();
+
+  @override
+  Stream<Map<String, dynamic>> get messages => _messages.stream;
+
+  @override
+  Stream<String> get errors => _errors.stream;
+
+  @override
+  Stream<ChatSocketStatus> get status => _status.stream;
+
+  @override
+  bool get isConnected => true;
+
+  @override
+  void connect(String accessToken) {}
+
+  @override
+  void joinRoom(String roomId) {}
+
+  @override
+  void leaveRoom(String roomId) {}
+
+  @override
+  void sendMessage({required String roomId, required String content}) {}
+
+  @override
+  void disconnect() {}
+
+  @override
+  void dispose() {
+    _messages.close();
+    _errors.close();
+    _status.close();
   }
 }
 
@@ -138,6 +195,15 @@ List<Override> _baseOverrides() {
       (ref) async => const <StaffParcelItem>[],
     ),
     contactRepositoryProvider.overrideWith((ref) => _FakeContactRepository()),
+    tokenStorageProvider.overrideWithValue(_FakeTokenStorage()),
+    chatSocketProvider.overrideWithValue(_NoopChatSocket()),
+    branchesProvider.overrideWith(
+      (ref) async => const [
+        Branch(id: 'b-cls', name: 'CLS Express', code: 'CLS'),
+        Branch(id: 'b-kd', name: 'KD Express', code: 'KD'),
+      ],
+    ),
+    currentBranchIdProvider.overrideWith((ref) async => 'b-cls'),
   ];
 }
 

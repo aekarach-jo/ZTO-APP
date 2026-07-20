@@ -15,6 +15,10 @@ abstract class PushTokenService {
 class FirebasePushTokenService implements PushTokenService {
   const FirebasePushTokenService();
 
+  static const int _appleTokenWaitAttempts = 30;
+  static const Duration _appleTokenWaitInterval = Duration(seconds: 1);
+  static const int _fcmTokenRetryAttempts = 10;
+
   Future<bool> _ensureFirebaseInitialized() async {
     try {
       Firebase.app();
@@ -39,10 +43,32 @@ class FirebasePushTokenService implements PushTokenService {
     }
 
     try {
-      await FirebaseMessaging.instance.requestPermission();
-      final token = await FirebaseMessaging.instance.getToken();
-      _logPushToken('getToken=${_previewToken(token)}');
-      return token;
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      _logPushToken('permission=${settings.authorizationStatus.name}');
+
+      if (_isApplePushPlatform()) {
+        await _waitForApplePushToken();
+      }
+
+      for (var attempt = 1; attempt <= _fcmTokenRetryAttempts; attempt++) {
+        final token = await FirebaseMessaging.instance.getToken();
+        _logPushToken(
+          'getToken attempt=$attempt token=${_previewToken(token)}',
+        );
+        if (token != null && token.isNotEmpty) {
+          return token;
+        }
+        if (attempt < _fcmTokenRetryAttempts) {
+          await Future<void>.delayed(_appleTokenWaitInterval);
+        }
+      }
+
+      _logPushToken('getToken unavailable after retries');
+      return null;
     } catch (error) {
       _logPushToken('getToken failed: $error');
       return null;
@@ -62,6 +88,23 @@ class FirebasePushTokenService implements PushTokenService {
       _logPushToken('onTokenRefresh unavailable: $error');
       return const Stream<String>.empty();
     }
+  }
+
+  Future<void> _waitForApplePushToken() async {
+    for (var attempt = 1; attempt <= _appleTokenWaitAttempts; attempt++) {
+      final apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+      _logPushToken(
+        'getAPNSToken attempt=$attempt token=${_previewToken(apnsToken)}',
+      );
+      if (apnsToken != null && apnsToken.isNotEmpty) {
+        return;
+      }
+      if (attempt < _appleTokenWaitAttempts) {
+        await Future<void>.delayed(_appleTokenWaitInterval);
+      }
+    }
+
+    _logPushToken('APNs token unavailable after waiting');
   }
 }
 
@@ -98,4 +141,12 @@ void _logPushToken(String message) {
   if (kDebugMode) {
     debugPrint('[FCM_TOKEN] $message');
   }
+}
+
+bool _isApplePushPlatform() {
+  if (kIsWeb) {
+    return false;
+  }
+  return defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS;
 }

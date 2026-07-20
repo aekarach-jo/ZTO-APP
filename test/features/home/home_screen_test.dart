@@ -28,6 +28,24 @@ Widget _buildTestApp(
   List<Locale> supportedLocales = const [Locale('en')],
   AssetLoader assetLoader = const MockAssetLoader(kTestTranslations),
   bool showLocaleControls = false,
+  List<HomeParcel> parcels = const [
+    HomeParcel(
+      id: '1',
+      title: 'Sony WH-1000XM5 Headphones',
+      trackingNo: '#TH88291039',
+      weightLabel: '0.5 kg',
+      dateLabel: '14/5/2026',
+      status: 'pending',
+    ),
+    HomeParcel(
+      id: '2',
+      title: 'Phillips Air Fryer',
+      trackingNo: '#TH88291040',
+      weightLabel: '3.2 kg',
+      dateLabel: '15/5/2026',
+      status: 'ready_to_ship',
+    ),
+  ],
 }) {
   return EasyLocalization(
     supportedLocales: supportedLocales,
@@ -50,24 +68,7 @@ Widget _buildTestApp(
               home: ProviderScope(
                 overrides: [
                   homeParcelsProvider.overrideWith((ref) async {
-                    return const [
-                      HomeParcel(
-                        id: '1',
-                        title: 'Sony WH-1000XM5 Headphones',
-                        trackingNo: '#TH88291039',
-                        weightLabel: '0.5 kg',
-                        dateLabel: '15/5/2026',
-                        status: 'pending',
-                      ),
-                      HomeParcel(
-                        id: '2',
-                        title: 'Phillips Air Fryer',
-                        trackingNo: '#TH88291040',
-                        weightLabel: '3.2 kg',
-                        dateLabel: '15/5/2026',
-                        status: 'ready_to_ship',
-                      ),
-                    ];
+                    return parcels;
                   }),
                 ],
                 child: Scaffold(
@@ -102,18 +103,56 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(RefreshIndicator), findsOneWidget);
-    expect(find.text('Sony WH-1000XM5 Headphones'), findsOneWidget);
+    expect(find.text('Sony WH-1000XM5 Headphones'), findsNothing);
+    expect(find.text('#TH88291039'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'Phillips');
     await tester.pumpAndSettle();
 
-    expect(find.text('Phillips Air Fryer'), findsOneWidget);
-    expect(find.text('Sony WH-1000XM5 Headphones'), findsNothing);
+    expect(find.text('Phillips Air Fryer'), findsNothing);
+    expect(find.text('#TH88291040'), findsOneWidget);
+    expect(find.text('#TH88291039'), findsNothing);
 
     await tester.enterText(find.byType(TextField), 'not-found-keyword');
     await tester.pumpAndSettle();
 
     expect(find.text('No parcels match your search'), findsOneWidget);
+  });
+
+  testWidgets('grouped parcels hide titles and share one action row', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildTestApp(
+        const HomeScreen(),
+        parcels: const [
+          HomeParcel(
+            id: '1',
+            title: 'Sony WH-1000XM5 Headphones',
+            trackingNo: '#TH88291039',
+            weightLabel: '0.5 kg',
+            dateLabel: '15/5/2026',
+            status: 'pending',
+          ),
+          HomeParcel(
+            id: '2',
+            title: 'Phillips Air Fryer',
+            trackingNo: '#TH88291040',
+            weightLabel: '3.2 kg',
+            dateLabel: '15/5/2026',
+            status: 'ready_to_ship',
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sony WH-1000XM5 Headphones'), findsNothing);
+    expect(find.text('Phillips Air Fryer'), findsNothing);
+    expect(find.text('Pickup'), findsOneWidget);
+    expect(find.text('Forward'), findsOneWidget);
+    expect(find.text('#TH88291039'), findsOneWidget);
+    expect(find.text('#TH88291040'), findsOneWidget);
   });
 
   testWidgets('tapping parcel action shows not implemented snackbar', (
@@ -125,9 +164,9 @@ void main() {
     await tester.enterText(find.byType(TextField), 'Phillips');
     await tester.pumpAndSettle();
 
-    final actionButton = find.text('Pickup');
+    expect(find.text('Pickup'), findsOneWidget);
+    final actionButton = find.text('Forward');
     expect(actionButton, findsOneWidget);
-    expect(find.text('Forward'), findsOneWidget);
     await tester.ensureVisible(actionButton);
     await tester.pumpAndSettle();
     await tester.tap(actionButton);
@@ -147,30 +186,30 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Pickup'), findsWidgets);
-    expect(find.text('Forward'), findsWidgets);
+    expect(find.text('Pickup'), findsOneWidget);
+    expect(find.text('Forward'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('switch-lo')));
     await tester.pumpAndSettle();
 
-    expect(find.text('ຮັບເອງ'), findsWidgets);
-    expect(find.text('ສົ່ງຕໍ່'), findsWidgets);
+    expect(find.text('ຮັບເອງ'), findsOneWidget);
+    expect(find.text('ສົ່ງຕໍ່'), findsOneWidget);
     expect(find.text('Pickup'), findsNothing);
     expect(find.text('Forward'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('switch-zh')));
     await tester.pumpAndSettle();
 
-    expect(find.text('自取'), findsWidgets);
-    expect(find.text('转运'), findsWidgets);
+    expect(find.text('自取'), findsOneWidget);
+    expect(find.text('转运'), findsOneWidget);
     expect(find.text('ຮັບເອງ'), findsNothing);
     expect(find.text('ສົ່ງຕໍ່'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('switch-en')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Pickup'), findsWidgets);
-    expect(find.text('Forward'), findsWidgets);
+    expect(find.text('Pickup'), findsOneWidget);
+    expect(find.text('Forward'), findsOneWidget);
     expect(find.text('自取'), findsNothing);
     expect(find.text('转运'), findsNothing);
   });

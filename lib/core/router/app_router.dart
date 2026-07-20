@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../network/network_providers.dart';
 import '../../features/auth/presentation/screens/forgot_password_otp_screen.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
@@ -9,20 +11,69 @@ import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/reset_password_screen.dart';
 import '../../features/main_layout/presentation/screens/main_layout_screen.dart';
 import '../../features/parcel_claim/presentation/screens/parcel_claim_screen.dart';
+import '../../features/parcel_payment/presentation/screens/parcel_payment_screen.dart';
+
+const String appStartupRoutePath = '/startup';
+
+final Set<String> _publicAuthRoutes = {
+  LoginScreen.routePath,
+  ForgotPasswordScreen.routePath,
+  ForgotPasswordOtpScreen.routePath,
+  ResetPasswordScreen.routePath,
+  RegisterScreen.routePath,
+  RegisterOtpScreen.routePath,
+};
+
+String? resolveAppRedirect({
+  required String location,
+  required bool isAuthLoading,
+  required bool isAuthenticated,
+}) {
+  final normalizedLocation = location == '/' ? appStartupRoutePath : location;
+  final isStartupRoute = normalizedLocation == appStartupRoutePath;
+  final isPublicRoute = _publicAuthRoutes.contains(normalizedLocation);
+
+  if (isAuthLoading) {
+    return isStartupRoute ? null : appStartupRoutePath;
+  }
+
+  if (isStartupRoute) {
+    return isAuthenticated ? MainLayoutScreen.routePath : LoginScreen.routePath;
+  }
+
+  if (!isAuthenticated && !isPublicRoute) {
+    return LoginScreen.routePath;
+  }
+
+  if (isAuthenticated && isPublicRoute) {
+    return MainLayoutScreen.routePath;
+  }
+
+  return null;
+}
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final authTokens = ref.watch(authTokensProvider);
+  final isAuthLoading = authTokens.isLoading;
+  final isAuthenticated = authTokens.asData?.value != null;
+
   return GoRouter(
-    initialLocation: LoginScreen.routePath,
+    initialLocation: appStartupRoutePath,
     redirect: (context, state) {
-      // Normalize app entry and stale deep links to a valid auth entry route.
-      if (state.matchedLocation == '/') {
-        return LoginScreen.routePath;
-      }
-      return null;
+      return resolveAppRedirect(
+        location: state.matchedLocation,
+        isAuthLoading: isAuthLoading,
+        isAuthenticated: isAuthenticated,
+      );
     },
-    errorBuilder: (context, state) => const LoginScreen(),
+    errorBuilder: (context, state) =>
+        isAuthenticated ? const MainLayoutScreen() : const LoginScreen(),
     routes: [
-      GoRoute(path: '/', redirect: (context, state) => LoginScreen.routePath),
+      GoRoute(
+        path: appStartupRoutePath,
+        builder: (context, state) => const _AppStartupScreen(),
+      ),
+      GoRoute(path: '/', redirect: (context, state) => appStartupRoutePath),
       GoRoute(
         path: LoginScreen.routePath,
         builder: (context, state) => const LoginScreen(),
@@ -73,6 +124,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: ParcelClaimScreen.routePath,
         builder: (context, state) => const ParcelClaimScreen(),
       ),
+      GoRoute(
+        path: ParcelPaymentScreen.routePath,
+        builder: (context, state) {
+          final extra = state.extra;
+          if (extra is! ParcelPaymentArgs) {
+            return const MainLayoutScreen();
+          }
+          return ParcelPaymentScreen(args: extra);
+        },
+      ),
     ],
   );
 });
+
+class _AppStartupScreen extends StatelessWidget {
+  const _AppStartupScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
+}

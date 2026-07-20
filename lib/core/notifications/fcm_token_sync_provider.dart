@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,16 +25,7 @@ final fcmTokenSyncProvider = Provider<void>((ref) {
 
     try {
       final dio = ref.read(apiClientProvider).dio;
-      try {
-        await dio.patch<dynamic>('/auth/fcm-token', data: {'fcmToken': token});
-      } on DioException catch (error) {
-        final statusCode = error.response?.statusCode;
-        if (statusCode != 404 && statusCode != 405) {
-          rethrow;
-        }
-        _logFcmSync('PATCH unavailable ($statusCode), fallback to POST');
-        await dio.post<dynamic>('/auth/fcm-token', data: {'fcmToken': token});
-      }
+      await dio.post<dynamic>('/auth/fcm-token', data: {'fcmToken': token});
       lastSyncedToken = token;
       _logFcmSync('Synced token=${_previewToken(token)}');
     } catch (error) {

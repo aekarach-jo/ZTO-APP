@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../auth/application/auth_provider.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
+import '../../../branch/data/branch_repository.dart';
+import '../../../contact/data/contact_repository.dart';
 import '../../../contact/presentation/screens/contact_screen.dart';
 import '../../application/main_layout_navigation_provider.dart';
 import '../../../home/presentation/screens/home_screen.dart';
@@ -351,16 +353,12 @@ class _MainTopBar extends StatelessWidget {
                   onLogout();
                 },
                 itemBuilder: (context) => [
-                  // PopupMenuItem<_TopBarMenuAction>(
-                  //   key: const ValueKey('topbar-menu-switch-role'),
-                  //   value: _TopBarMenuAction.switchRole,
-                  //   child: Text(
-                  //     (isCustomer
-                  //             ? 'switch_branch'.tr()
-                  //             : 'switch_to_customer'.tr())
-                  //         .toUpperCase(),
-                  //   ),
-                  // ),
+                  const PopupMenuItem<_TopBarMenuAction>(
+                    key: ValueKey('topbar-menu-branch'),
+                    enabled: false,
+                    child: _BranchMenuItem(),
+                  ),
+                  const PopupMenuDivider(),
                   PopupMenuItem<_TopBarMenuAction>(
                     key: const ValueKey('topbar-menu-switch-language'),
                     enabled: false,
@@ -431,6 +429,103 @@ class _LanguageFlagButton extends StatelessWidget {
         Navigator.of(context).pop();
       },
       icon: Text(flag, style: const TextStyle(fontSize: 24)),
+    );
+  }
+}
+
+/// First item in the top-bar dropdown: a toggle that switches the active
+/// branch (e.g. CLS / KD). Selecting a branch calls `PATCH /users/me/branch`
+/// and refreshes the chat so it can resolve a room id.
+class _BranchMenuItem extends ConsumerWidget {
+  const _BranchMenuItem();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final branches = ref.watch(branchesProvider).valueOrNull ?? const <Branch>[];
+    final currentId = ref.watch(currentBranchIdProvider).valueOrNull;
+
+    if (branches.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: 6.h),
+        child: Text(
+          'branch_loading'.tr(),
+          style: TextStyle(
+            color: const Color(0xFF6E7D92),
+            fontSize: 12.sp,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        for (var i = 0; i < branches.length; i++) ...[
+          if (i > 0) SizedBox(width: 8.w),
+          Expanded(
+            child: _BranchChip(
+              branch: branches[i],
+              selected: branches[i].id == currentId,
+              onTap: () => _selectBranch(context, branches[i]),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _selectBranch(BuildContext context, Branch branch) {
+    // Capture the app-level container before the menu (and this widget) closes.
+    final container = ProviderScope.containerOf(context);
+    Navigator.of(context).pop();
+    unawaited(_applySelection(container, branch.id));
+  }
+
+  Future<void> _applySelection(
+    ProviderContainer container,
+    String branchId,
+  ) async {
+    try {
+      await container.read(branchRepositoryProvider).selectBranch(branchId);
+    } finally {
+      container.invalidate(currentBranchIdProvider);
+      container.invalidate(contactThreadProvider);
+    }
+  }
+}
+
+class _BranchChip extends StatelessWidget {
+  const _BranchChip({
+    required this.branch,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Branch branch;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      key: ValueKey('topbar-branch-${branch.code}'),
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        backgroundColor:
+            selected ? AppTheme.brandBlue : const Color(0xFFEAF4FF),
+        foregroundColor: selected ? Colors.white : AppTheme.brandBlueDark,
+        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 8.h),
+        minimumSize: Size(0, 36.h),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+      ),
+      child: Text(
+        branch.label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w700),
+      ),
     );
   }
 }

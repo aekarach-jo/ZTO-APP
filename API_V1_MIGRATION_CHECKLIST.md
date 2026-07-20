@@ -93,7 +93,7 @@ Reference: `http://14.207.141.82/api/v1/docs#/`
 - [x] `POST /auth/send-otp`
 - [x] `POST /auth/login`
 - [x] `POST /auth/register`
-- [x] `PATCH /auth/fcm-token`
+- [x] `POST /auth/fcm-token`
 - [x] `POST /auth/refresh`
 
 ### Parcels and derived screens
@@ -137,4 +137,3 @@ Reference: `http://14.207.141.82/api/v1/docs#/`
 - [ ] Verify request/response schema field-by-field against latest docs
 - [ ] Add end-to-end flow test: customer send -> staff inspect -> staff handover -> history/profile reflects final state
 - [ ] Confirm all backend status enums and map UI chips/colors strictly to final enum contract
-

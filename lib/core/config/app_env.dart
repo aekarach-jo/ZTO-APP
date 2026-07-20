@@ -9,6 +9,37 @@ class AppEnv {
     dotenv.env['API_BASE_URL'] ?? 'http://14.207.141.82/api/v1',
   );
 
+  /// Base URL for the Socket.IO chat server (without namespace).
+  ///
+  /// Defaults to the SAME origin as the REST API (e.g. `http://14.207.141.82`),
+  /// which is served by nginx in front of the backend that issues the JWT.
+  /// The raw backend port (:3000) can be a different instance/secret and reject
+  /// REST-issued tokens with `Unauthorized`, so we reuse the REST origin.
+  /// Overridable with the `SOCKET_URL` env var.
+  static String get socketBaseUrl {
+    final override = dotenv.env['SOCKET_URL']?.trim();
+    if (override != null && override.isNotEmpty) {
+      return _stripTrailingSlash(override);
+    }
+    return _deriveSocketBaseUrl(apiBaseUrl);
+  }
+
+  static String _deriveSocketBaseUrl(String apiBaseUrl) {
+    final uri = Uri.tryParse(apiBaseUrl);
+    if (uri == null || !uri.hasAuthority) {
+      return 'http://14.207.141.82';
+    }
+    final scheme = uri.scheme.isEmpty ? 'http' : uri.scheme;
+    final port = uri.hasPort ? ':${uri.port}' : '';
+    return '$scheme://${uri.host}$port';
+  }
+
+  static String _stripTrailingSlash(String value) {
+    return value.endsWith('/')
+        ? value.substring(0, value.length - 1)
+        : value;
+  }
+
   static String removeEndpointPort(String endpoint) {
     final trimmedEndpoint = endpoint.trim();
     final uri = Uri.tryParse(trimmedEndpoint);

@@ -125,15 +125,7 @@ class ApiAuthRepository implements AuthRepository {
   @override
   Future<void> registerFcmToken({required String fcmToken}) async {
     final payload = {'fcmToken': fcmToken};
-    try {
-      await _dio.patch<dynamic>('/auth/fcm-token', data: payload);
-    } on DioException catch (error) {
-      if (error.response?.statusCode != 404 &&
-          error.response?.statusCode != 405) {
-        rethrow;
-      }
-      await _dio.post<dynamic>('/auth/fcm-token', data: payload);
-    }
+    await _dio.post<dynamic>('/auth/fcm-token', data: payload);
   }
 
   @override

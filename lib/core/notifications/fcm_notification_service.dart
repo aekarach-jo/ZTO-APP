@@ -13,17 +13,21 @@ import '../../features/main_layout/presentation/screens/main_layout_screen.dart'
 import '../../features/notifications/data/notification_repository.dart';
 import '../router/app_router.dart';
 
-const AndroidNotificationChannel _ztoNotificationChannel =
-    AndroidNotificationChannel(
-      'zto_push_notifications',
-      'CLS Global Notifications',
-      description:
-          'Notifications about parcels, account updates, and CLS Global alerts.',
-      importance: Importance.high,
-    );
+const AndroidNotificationChannel
+_ztoNotificationChannel = AndroidNotificationChannel(
+  'zto_push_notifications',
+  'CLS Global Notifications',
+  description:
+      'Notifications about parcels, account updates, and CLS Global alerts.',
+  importance: Importance.high,
+);
 
 final FlutterLocalNotificationsPlugin _localNotifications =
     FlutterLocalNotificationsPlugin();
+typedef NotificationPayloadHandler = void Function(Map<String, dynamic> data);
+
+NotificationPayloadHandler? _localNotificationOpenHandler;
+bool _localNotificationsInitialized = false;
 
 void refreshFcmRelatedProviders(
   void Function(ProviderOrFamily provider) invalidate,
@@ -46,14 +50,29 @@ Future<bool> _ensureFirebaseInitialized() async {
   }
 }
 
-Future<void> _initializeLocalNotifications() async {
+Future<void> _initializeLocalNotifications({
+  NotificationPayloadHandler? onNotificationOpened,
+}) async {
+  if (onNotificationOpened != null) {
+    _localNotificationOpenHandler = onNotificationOpened;
+  }
+  if (_localNotificationsInitialized) {
+    return;
+  }
+
   const initializationSettings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     iOS: DarwinInitializationSettings(),
     macOS: DarwinInitializationSettings(),
   );
 
-  await _localNotifications.initialize(settings: initializationSettings);
+  await _localNotifications.initialize(
+    settings: initializationSettings,
+    onDidReceiveNotificationResponse: _handleLocalNotificationResponse,
+    onDidReceiveBackgroundNotificationResponse:
+        notificationTapBackgroundHandler,
+  );
+  _localNotificationsInitialized = true;
 
   final androidPlugin = _localNotifications
       .resolvePlatformSpecificImplementation<
@@ -98,6 +117,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await _showLocalNotification(message);
 }
 
+@pragma('vm:entry-point')
+void notificationTapBackgroundHandler(NotificationResponse response) {
+  _logFcm(
+    'Background local notification tapped payload=${response.payload ?? '-'}',
+  );
+}
+
 class FcmNotificationService {
   FcmNotificationService(this._ref);
 
@@ -118,7 +144,9 @@ class FcmNotificationService {
       return;
     }
 
-    await _initializeLocalNotifications();
+    await _initializeLocalNotifications(
+      onNotificationOpened: _handleLocalNotificationOpened,
+    );
     final settings = await FirebaseMessaging.instance.requestPermission(
       alert: true,
       badge: true,
@@ -132,6 +160,16 @@ class FcmNotificationService {
           sound: true,
         );
 
+    final launchDetails = await _localNotifications
+        .getNotificationAppLaunchDetails();
+    if (launchDetails?.didNotificationLaunchApp ?? false) {
+      final payload = _decodeNotificationPayload(
+        launchDetails?.notificationResponse?.payload,
+      );
+      _logFcm('Local notification launched app data=$payload');
+      _handleLocalNotificationOpened(payload);
+    }
+
     final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
       _logRemoteMessage('Initial message opened app', initialMessage);
@@ -141,7 +179,13 @@ class FcmNotificationService {
     _foregroundSubscription = FirebaseMessaging.onMessage.listen((message) {
       _logRemoteMessage('Foreground message received', message);
       _refreshFcmRelatedData();
-      unawaited(_showLocalNotification(message));
+      if (_shouldShowForegroundLocalNotification(message)) {
+        unawaited(_showLocalNotification(message));
+      } else {
+        _logFcm(
+          'Foreground local notification skipped: OS will present notification payload',
+        );
+      }
     });
 
     _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
@@ -157,6 +201,15 @@ class FcmNotificationService {
 
   void _handleNotificationOpened(RemoteMessage message) {
     _logRemoteMessage('Notification opened', message);
+    _openNotificationsLanding();
+  }
+
+  void _handleLocalNotificationOpened(Map<String, dynamic> data) {
+    _logFcm('Local notification opened data=$data');
+    _openNotificationsLanding();
+  }
+
+  void _openNotificationsLanding() {
     _refreshFcmRelatedData();
     _ref.read(customerTabJumpTargetProvider.notifier).state = 0;
     _ref.read(appRouterProvider).go(MainLayoutScreen.routePath);
@@ -226,6 +279,47 @@ Future<void> _showLocalNotification(RemoteMessage message) async {
     ),
     payload: jsonEncode(message.data),
   );
+}
+
+Future<void> _handleLocalNotificationResponse(
+  NotificationResponse response,
+) async {
+  final data = _decodeNotificationPayload(response.payload);
+  _logFcm(
+    'Local notification tapped actionId=${response.actionId} payload=$data',
+  );
+  _localNotificationOpenHandler?.call(data);
+}
+
+bool _shouldShowForegroundLocalNotification(RemoteMessage message) {
+  if (kIsWeb) {
+    return false;
+  }
+
+  final isApplePlatform =
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS;
+  if (isApplePlatform && message.notification != null) {
+    return false;
+  }
+  return true;
+}
+
+Map<String, dynamic> _decodeNotificationPayload(String? payload) {
+  if (payload == null || payload.trim().isEmpty) {
+    return const <String, dynamic>{};
+  }
+
+  try {
+    final decoded = jsonDecode(payload);
+    if (decoded is Map) {
+      return decoded.map((key, value) => MapEntry(key.toString(), value));
+    }
+  } catch (error) {
+    _logFcm('Local notification payload decode failed: $error');
+  }
+
+  return const <String, dynamic>{};
 }
 
 String? _readDataString(Map<String, dynamic> data, String key) {

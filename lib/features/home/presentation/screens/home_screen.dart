@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/home_parcel_repository.dart';
 import '../../../parcel_claim/presentation/screens/parcel_claim_screen.dart';
+import '../../../parcel_payment/presentation/screens/parcel_payment_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -16,6 +17,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  static const double _pickupFeePerParcel = 150.0;
+
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -82,8 +85,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     _ParcelGroupCard(
                       cardKey: ValueKey('home-parcel-group-card-$groupIndex'),
                       items: groupedParcels[groupIndex].items,
-                      onDropAtPoint: () => _showNotImplementedSnack(context),
-                      onCallPickup: () => _showNotImplementedSnack(context),
+                      onPickup: (items) => _openPickupPayment(context, items),
+                      onForward: (_) => _showNotImplementedSnack(context),
                     ),
                     if (groupIndex != groupedParcels.length - 1)
                       SizedBox(height: 18.h),
@@ -104,6 +107,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('action_not_implemented'.tr())));
+  }
+
+  void _openPickupPayment(BuildContext context, List<_ParcelItem> items) {
+    if (items.isEmpty) {
+      return;
+    }
+    final itemName = items.length == 1
+        ? items.first.title
+        : 'pickup_payment_item_count'.tr(args: ['${items.length}']);
+    final amount = _pickupFeePerParcel * items.length;
+    context.push(
+      ParcelPaymentScreen.routePath,
+      extra: ParcelPaymentArgs(itemName: itemName, amount: amount),
+    );
   }
 }
 
@@ -239,17 +256,20 @@ class _ParcelGroupCard extends StatelessWidget {
   const _ParcelGroupCard({
     required this.cardKey,
     required this.items,
-    required this.onDropAtPoint,
-    required this.onCallPickup,
+    required this.onPickup,
+    required this.onForward,
   });
 
   final Key cardKey;
   final List<_ParcelItem> items;
-  final VoidCallback onDropAtPoint;
-  final VoidCallback onCallPickup;
+  final ValueChanged<List<_ParcelItem>> onPickup;
+  final ValueChanged<List<_ParcelItem>> onForward;
 
   @override
   Widget build(BuildContext context) {
+    final isGrouped = items.length > 1;
+    final showGroupActions = items.any((item) => item.showActions);
+
     return Container(
       key: cardKey,
       padding: EdgeInsets.all(16.w),
@@ -263,14 +283,25 @@ class _ParcelGroupCard extends StatelessWidget {
           for (var index = 0; index < items.length; index++) ...[
             _ParcelListItem(
               item: items[index],
-              onDropAtPoint: onDropAtPoint,
-              onCallPickup: onCallPickup,
+              hideTitle: true,
+              showActions: !isGrouped && items[index].showActions,
+              onDropAtPoint: () => onPickup(<_ParcelItem>[items[index]]),
+              onCallPickup: () => onForward(<_ParcelItem>[items[index]]),
             ),
             if (index != items.length - 1) ...[
               SizedBox(height: 14.h),
               Divider(height: 1, color: const Color(0xFFE8EEF6)),
               SizedBox(height: 14.h),
             ],
+          ],
+          if (isGrouped && showGroupActions) ...[
+            SizedBox(height: 16.h),
+            Divider(height: 1, color: const Color(0xFFE8EEF6)),
+            SizedBox(height: 16.h),
+            _ParcelActionRow(
+              onDropAtPoint: () => onPickup(items),
+              onCallPickup: () => onForward(items),
+            ),
           ],
         ],
       ),
@@ -281,11 +312,15 @@ class _ParcelGroupCard extends StatelessWidget {
 class _ParcelListItem extends StatelessWidget {
   const _ParcelListItem({
     required this.item,
+    required this.hideTitle,
+    required this.showActions,
     required this.onDropAtPoint,
     required this.onCallPickup,
   });
 
   final _ParcelItem item;
+  final bool hideTitle;
+  final bool showActions;
   final VoidCallback onDropAtPoint;
   final VoidCallback onCallPickup;
 
@@ -301,15 +336,17 @@ class _ParcelListItem extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    item.title,
-                    style: TextStyle(
-                      fontSize: 19.sp,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF161616),
+                  if (!hideTitle) ...[
+                    Text(
+                      item.title,
+                      style: TextStyle(
+                        fontSize: 19.sp,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF161616),
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 4.h),
+                    SizedBox(height: 4.h),
+                  ],
                   Text(
                     item.trackNo,
                     style: TextStyle(
@@ -358,54 +395,72 @@ class _ParcelListItem extends StatelessWidget {
             ),
           ],
         ),
-        if (item.showActions) ...[
+        if (showActions) ...[
           SizedBox(height: 16.h),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 50.h,
-                  child: ElevatedButton(
-                    onPressed: onDropAtPoint,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.brandBlueDark,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16.r),
-                      ),
-                      textStyle: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    child: Text(context.tr('action_pickup')),
-                  ),
-                ),
-              ),
-              SizedBox(width: 12.w),
-              Expanded(
-                child: SizedBox(
-                  height: 50.h,
-                  child: ElevatedButton(
-                    onPressed: onCallPickup,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.brandBlue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16.r),
-                      ),
-                      textStyle: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    child: Text(context.tr('action_forward')),
-                  ),
-                ),
-              ),
-            ],
+          _ParcelActionRow(
+            onDropAtPoint: onDropAtPoint,
+            onCallPickup: onCallPickup,
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _ParcelActionRow extends StatelessWidget {
+  const _ParcelActionRow({
+    required this.onDropAtPoint,
+    required this.onCallPickup,
+  });
+
+  final VoidCallback onDropAtPoint;
+  final VoidCallback onCallPickup;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 50.h,
+            child: ElevatedButton(
+              onPressed: onDropAtPoint,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.brandBlueDark,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                textStyle: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              child: Text(context.tr('action_pickup')),
+            ),
+          ),
+        ),
+        SizedBox(width: 12.w),
+        Expanded(
+          child: SizedBox(
+            height: 50.h,
+            child: ElevatedButton(
+              onPressed: onCallPickup,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.brandBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                textStyle: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              child: Text(context.tr('action_forward')),
+            ),
+          ),
+        ),
       ],
     );
   }

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,26 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../data/contact_repository.dart';
+
+/// Turns a thread build error into a short human-readable detail so we can see
+/// exactly why chat failed to initialise (bad room, /users/me error, ...).
+String _describeThreadError(Object error) {
+  if (error is ContactSendException) {
+    return error.message;
+  }
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    final path = error.requestOptions.path;
+    final data = error.response?.data;
+    final apiMessage = data is Map && data['message'] != null
+        ? data['message'].toString()
+        : '';
+    return 'Request failed ${status ?? ''} $path'
+            '${apiMessage.isNotEmpty ? ': $apiMessage' : ''}'
+        .trim();
+  }
+  return error.toString();
+}
 
 class ContactScreen extends ConsumerStatefulWidget {
   const ContactScreen({super.key});
@@ -17,7 +38,6 @@ class ContactScreen extends ConsumerStatefulWidget {
 class _ContactScreenState extends ConsumerState<ContactScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  bool _isSending = false;
 
   @override
   void dispose() {
@@ -28,6 +48,16 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Auto-scroll to the newest message whenever the thread grows.
+    ref.listen<AsyncValue<List<ContactMessage>>>(contactThreadProvider,
+        (previous, next) {
+      final previousCount = previous?.valueOrNull?.length ?? 0;
+      final nextCount = next.valueOrNull?.length ?? 0;
+      if (nextCount > previousCount) {
+        _scrollToBottom();
+      }
+    });
+
     final threadAsync = ref.watch(contactThreadProvider);
 
     return Container(
@@ -46,7 +76,7 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
                     'contact_title'.tr(),
                     style: TextStyle(
                       color: const Color(0xFF111111),
-                      fontSize: 46.sp,
+                      fontSize: 30.sp,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -83,6 +113,7 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
                     loading: () =>
                         const Center(child: CircularProgressIndicator()),
                     error: (error, stackTrace) => _ErrorCard(
+                      detail: _describeThreadError(error),
                       onRetry: () => ref.invalidate(contactThreadProvider),
                     ),
                   ),
@@ -128,7 +159,7 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
                     height: 50.w,
                     child: ElevatedButton(
                       key: const ValueKey('contact-send-button'),
-                      onPressed: _isSending ? null : _sendMessage,
+                      onPressed: _sendMessage,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.brandBlue,
                         foregroundColor: Colors.white,
@@ -138,7 +169,7 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
                         ),
                         elevation: 0,
                       ),
-                      child: Text('🚀', style: TextStyle(fontSize: 20.sp)),
+                      child: Icon(Icons.send_rounded, size: 22.sp),
                     ),
                   ),
                 ],
@@ -156,48 +187,29 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
       return;
     }
 
-    setState(() {
-      _isSending = true;
-    });
-    _messageController.clear();
-
-    ref
-        .read(contactThreadProvider.notifier)
-        .sendMessage(text)
-        .then((_) {
-          if (!mounted) {
-            return;
-          }
-          _scrollToBottom();
-        })
-        .catchError((error) {
-          if (!mounted) {
-            return;
-          }
-          if (_messageController.text.trim().isEmpty) {
-            _messageController.text = text;
-            _messageController.selection = TextSelection.collapsed(
-              offset: _messageController.text.length,
-            );
-          }
-
-          final fallback = 'contact_send_failed'.tr();
-          final details = error is ContactSendException ? error.message : '';
-          if (kDebugMode) {
-            debugPrint('[ContactScreen] Send failed error=$error');
-          }
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(details.isNotEmpty ? details : fallback)),
-          );
-        })
-        .whenComplete(() {
-          if (!mounted) {
-            return;
-          }
-          setState(() {
-            _isSending = false;
-          });
-        });
+    try {
+      ref.read(contactThreadProvider.notifier).sendMessage(text);
+      _messageController.clear();
+      // The sent message is appended when the server echoes it back via the
+      // `new-message` socket event; the ref.listen in build handles scrolling.
+    } on ContactSendException catch (error) {
+      if (kDebugMode) {
+        debugPrint('[ContactScreen] Send failed error=$error');
+      }
+      final fallback = 'contact_send_failed'.tr();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message.isNotEmpty ? error.message : fallback),
+        ),
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[ContactScreen] Send failed error=$error');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('contact_send_failed'.tr())),
+      );
+    }
   }
 
   void _scrollToBottom() {
@@ -223,30 +235,51 @@ class _ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isAgent = message.role == ContactMessageRole.agent;
     final radius = Radius.circular(18.r);
+    final agentName = message.senderName?.trim();
+    final showAgentName = isAgent && agentName != null && agentName.isNotEmpty;
 
     return Align(
       alignment: isAgent ? Alignment.centerLeft : Alignment.centerRight,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: 340.w),
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
-          decoration: BoxDecoration(
-            color: isAgent ? const Color(0xFFEAF4FF) : AppTheme.brandBlue,
-            borderRadius: BorderRadius.only(
-              topLeft: radius,
-              topRight: radius,
-              bottomLeft: isAgent ? Radius.circular(4.r) : radius,
-              bottomRight: isAgent ? radius : Radius.circular(4.r),
+        child: Column(
+          crossAxisAlignment:
+              isAgent ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+          children: [
+            if (showAgentName) ...[
+              Padding(
+                padding: EdgeInsets.only(left: 6.w, bottom: 4.h),
+                child: Text(
+                  agentName,
+                  style: TextStyle(
+                    color: const Color(0xFF6E7D92),
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
+              decoration: BoxDecoration(
+                color: isAgent ? const Color(0xFFEAF4FF) : AppTheme.brandBlue,
+                borderRadius: BorderRadius.only(
+                  topLeft: radius,
+                  topRight: radius,
+                  bottomLeft: isAgent ? Radius.circular(4.r) : radius,
+                  bottomRight: isAgent ? radius : Radius.circular(4.r),
+                ),
+              ),
+              child: Text(
+                message.text,
+                style: TextStyle(
+                  color: isAgent ? const Color(0xFF2E58B5) : Colors.white,
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
-          ),
-          child: Text(
-            message.text,
-            style: TextStyle(
-              color: isAgent ? const Color(0xFF2E58B5) : Colors.white,
-              fontSize: 20.sp,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          ],
         ),
       ),
     );
@@ -254,9 +287,10 @@ class _ChatBubble extends StatelessWidget {
 }
 
 class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.onRetry});
+  const _ErrorCard({required this.onRetry, this.detail});
 
   final VoidCallback onRetry;
+  final String? detail;
 
   @override
   Widget build(BuildContext context) {
@@ -278,6 +312,18 @@ class _ErrorCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (detail != null && detail!.isNotEmpty) ...[
+            SizedBox(height: 6.h),
+            Text(
+              detail!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: const Color(0xFFB23B3B),
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           SizedBox(height: 8.h),
           TextButton(onPressed: onRetry, child: Text('common_retry'.tr())),
         ],
