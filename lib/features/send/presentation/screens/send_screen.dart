@@ -14,6 +14,7 @@ import '../../../home/data/home_parcel_repository.dart';
 import '../../../main_layout/application/main_layout_navigation_provider.dart';
 import '../../../parcel_payment/data/payment_repository.dart';
 import '../../../parcel_payment/presentation/screens/parcel_payment_screen.dart';
+import '../../../parcel_status/data/parcel_status_repository.dart';
 
 class SendScreen extends ConsumerStatefulWidget {
   const SendScreen({super.key});
@@ -501,12 +502,6 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                 label: _SendTextKeys.paymentFeeLabel.tr(),
                 amount: formatLak(feeQuote.fee),
               ),
-              SizedBox(height: 8.h),
-              _PriceRow(
-                label: _SendTextKeys.paymentVatLabel.tr(),
-                amount: formatLak(feeQuote.vat),
-                smallValue: true,
-              ),
               SizedBox(height: 12.h),
               Divider(
                 height: 1,
@@ -603,7 +598,6 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               .createForwardRequest(
                 CreateForwardRequest(
                   parcelId: selectedItem.id,
-                  weight: selectedItem.weightKg ?? 1.0,
                   recipientName: _recipientNameController.text.trim(),
                   recipientPhone: _recipientPhoneController.text.trim(),
                   recipientAddress: _recipientAddressController.text.trim(),
@@ -643,6 +637,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       });
       ref.invalidate(sendParcelsProvider);
       ref.invalidate(homeParcelsProvider);
+      ref.invalidate(parcelStatusProvider);
       ref.read(customerTabJumpTargetProvider.notifier).state = 0;
     } catch (_) {
       if (!mounted) {
@@ -959,13 +954,11 @@ class _PriceRow extends StatelessWidget {
     required this.label,
     required this.amount,
     this.highlight = false,
-    this.smallValue = false,
   });
 
   final String label;
   final String amount;
   final bool highlight;
-  final bool smallValue;
 
   @override
   Widget build(BuildContext context) {
@@ -987,7 +980,7 @@ class _PriceRow extends StatelessWidget {
           amount,
           style: TextStyle(
             color: highlight ? AppTheme.brandBlueDark : const Color(0xFF101010),
-            fontSize: highlight ? 32.sp : (smallValue ? 20.sp : 24.sp),
+            fontSize: highlight ? 32.sp : 24.sp,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -1068,7 +1061,6 @@ class _SendTextKeys {
   static const String paymentDestination = 'send_payment_destination';
   static const String paymentWeightBilled = 'send_payment_weight_billed';
   static const String paymentFeeLabel = 'send_payment_fee_label';
-  static const String paymentVatLabel = 'send_payment_vat_label';
   static const String paymentTotalLabel = 'send_payment_total_label';
   static const String paymentConfirmButton = 'send_payment_confirm_button';
   static const String forwardSuccessMessage = 'send_forward_success_message';

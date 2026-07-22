@@ -121,6 +121,7 @@
   "pickup_payment_card_coming_soon": "即将开放",
   "pickup_payment_card_unavailable": "信用卡支付即将开放，请使用 BCEL ONE",
   "pickup_payment_qr_progress": "包裹 {} / {}",
+  "pickup_payment_qr_items": "{} 个包裹",
   "pickup_payment_waiting": "等待支付确认...",
   "pickup_payment_qr_expired": "二维码已过期，请重新生成",
   "pickup_payment_new_qr_button": "生成新二维码",

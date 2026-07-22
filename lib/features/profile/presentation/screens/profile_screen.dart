@@ -5,8 +5,9 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
-import '../../../home/data/home_parcel_repository.dart';
 import '../../../orders/presentation/screens/order_history_screen.dart';
+import '../../../parcel_status/data/parcel_status_repository.dart';
+import '../../../parcel_status/presentation/screens/parcel_status_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -16,14 +17,12 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  int _selectedSummaryIndex = 0;
-
   @override
   Widget build(BuildContext context) {
-    final parcelsAsync = ref.watch(homeParcelsProvider);
+    final statusAsync = ref.watch(parcelStatusProvider);
 
     return RefreshIndicator(
-      onRefresh: () => ref.refresh(homeParcelsProvider.future),
+      onRefresh: () => ref.refresh(parcelStatusProvider.future),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(bottom: 20.h),
@@ -76,39 +75,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
           SizedBox(height: 16.h),
-          parcelsAsync.when(
-            data: (parcels) {
-              final grouped = _GroupedParcels.from(parcels);
-              final summaryItems = _buildSummaryItems(grouped);
-              return Column(
-                children: [
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 14.w),
-                    child: Row(
-                      children: [
-                        for (var i = 0; i < summaryItems.length; i++) ...[
-                          Expanded(
-                            child: _SummaryCard(
-                              item: summaryItems[i],
-                              cardKey: ValueKey('profile-summary-$i'),
-                              selected: i == _selectedSummaryIndex,
-                              onTap: () {
-                                setState(() {
-                                  _selectedSummaryIndex = i;
-                                });
-                              },
-                            ),
-                          ),
-                          if (i != summaryItems.length - 1)
-                            SizedBox(width: 8.w),
-                        ],
-                      ],
-                    ),
-                  ),
-                  ..._buildSelectedSection(grouped),
-                ],
-              );
-            },
+          statusAsync.when(
+            data: (page) => Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14.w),
+              child: ParcelStatusSection(
+                page: page,
+                summaryKeyPrefix: 'profile-summary',
+              ),
+            ),
             loading: () => Padding(
               padding: EdgeInsets.only(top: 18.h),
               child: const Center(child: CircularProgressIndicator()),
@@ -118,7 +92,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: _SimpleStateCard(
                 message: _ProfileTextKeys.loadError,
                 actionLabel: _ProfileTextKeys.retry,
-                onAction: () => ref.invalidate(homeParcelsProvider),
+                onAction: () => ref.invalidate(parcelStatusProvider),
               ),
             ),
           ),
@@ -143,250 +117,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   SnackBar(content: Text(_ProfileTextKeys.savedMessage.tr())),
                 );
               },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<_ProfileSummaryItem> _buildSummaryItems(_GroupedParcels grouped) {
-    return [
-      _ProfileSummaryItem(
-        titleKey: _ProfileTextKeys.summaryProcessing,
-        value: grouped.processing.length.toString(),
-        valueColor: AppTheme.brandBlueDark,
-        icon: '📦',
-        iconBackgroundColor: const Color(0xFFE7F2FF),
-      ),
-      _ProfileSummaryItem(
-        titleKey: _ProfileTextKeys.summaryReceived,
-        value: grouped.received.length.toString(),
-        valueColor: const Color(0xFF2DA85B),
-        icon: '🛬',
-        iconBackgroundColor: const Color(0xFFE2F5E8),
-      ),
-      _ProfileSummaryItem(
-        titleKey: _ProfileTextKeys.summaryAtHome,
-        value: grouped.atHome.length.toString(),
-        valueColor: AppTheme.brandBlue,
-        icon: '🏡',
-        iconBackgroundColor: const Color(0xFFE8F3FF),
-      ),
-      _ProfileSummaryItem(
-        titleKey: _ProfileTextKeys.summaryCompleted,
-        value: grouped.completed.length.toString(),
-        valueColor: AppTheme.brandBlueLight,
-        icon: '✅',
-        iconBackgroundColor: const Color(0xFFE7F4FF),
-      ),
-    ];
-  }
-
-  List<Widget> _buildSelectedSection(_GroupedParcels grouped) {
-    switch (_selectedSummaryIndex) {
-      case 1:
-        return _buildParcelSection(
-          titleKey: _ProfileTextKeys.receivedHistoryTitle,
-          items: grouped.received,
-          emptyMessage: _ProfileTextKeys.receivedHistoryEmpty,
-        );
-      case 2:
-        return _buildParcelSection(
-          titleKey: _ProfileTextKeys.homeDeliveryHistoryTitle,
-          items: grouped.atHome,
-          emptyMessage: _ProfileTextKeys.homeDeliveryEmptyMessage,
-        );
-      case 3:
-        return _buildParcelSection(
-          titleKey: _ProfileTextKeys.completedHistoryTitle,
-          items: grouped.completed,
-          emptyMessage: _ProfileTextKeys.completedHistoryEmpty,
-        );
-      case 0:
-      default:
-        return _buildParcelSection(
-          titleKey: _ProfileTextKeys.activeParcelsTitle,
-          items: grouped.processing,
-          emptyMessage: _ProfileTextKeys.activeParcelsEmpty,
-        );
-    }
-  }
-
-  List<Widget> _buildParcelSection({
-    required String titleKey,
-    required List<HomeParcel> items,
-    required String emptyMessage,
-  }) {
-    return [
-      SizedBox(height: 18.h),
-      Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16.w),
-        child: Text(
-          titleKey.tr(),
-          style: TextStyle(
-            color: const Color(0xFF8190A4),
-            fontSize: 15.sp,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-      SizedBox(height: 10.h),
-      if (items.isEmpty)
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 14.w),
-          child: _SimpleStateCard(message: emptyMessage),
-        )
-      else
-        for (var i = 0; i < items.length; i++) ...[
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 14.w),
-            child: _ParcelCard(item: items[i]),
-          ),
-          if (i != items.length - 1) SizedBox(height: 10.h),
-        ],
-    ];
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
-    required this.item,
-    required this.cardKey,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _ProfileSummaryItem item;
-  final Key cardKey;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        key: cardKey,
-        borderRadius: BorderRadius.circular(16.r),
-        onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 10.h),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16.r),
-            border: Border.all(
-              color: selected ? item.valueColor : const Color(0xFFE4EAF3),
-            ),
-          ),
-          child: Column(
-            children: [
-              Container(
-                width: 44.w,
-                height: 44.w,
-                decoration: BoxDecoration(
-                  color: item.iconBackgroundColor,
-                  borderRadius: BorderRadius.circular(13.r),
-                ),
-                alignment: Alignment.center,
-                child: Text(item.icon, style: TextStyle(fontSize: 20.sp)),
-              ),
-              SizedBox(height: 8.h),
-              SizedBox(
-                height: 18.h,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    item.titleKey.tr(),
-                    maxLines: 1,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: const Color(0xFF111111),
-                      fontSize: 11.sp,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(height: 2.h),
-              Text(
-                item.value,
-                style: TextStyle(
-                  color: item.valueColor,
-                  fontSize: 18.sp,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ParcelCard extends StatelessWidget {
-  const _ParcelCard({required this.item});
-
-  final HomeParcel item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18.r),
-        border: Border.all(color: const Color(0xFFE2E8F1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.title,
-                  style: TextStyle(
-                    color: const Color(0xFF111111),
-                    fontSize: 15.sp,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF5FF),
-                  borderRadius: BorderRadius.circular(14.r),
-                ),
-                child: Text(
-                  item.weightLabel,
-                  style: TextStyle(
-                    color: AppTheme.brandBlueDark,
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 2.h),
-          Text(
-            item.trackingNo,
-            style: TextStyle(
-              color: const Color(0xFF8A99AD),
-              fontSize: 14.sp,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          SizedBox(height: 10.h),
-          Text(
-            item.dateLabel,
-            style: TextStyle(
-              color: const Color(0xFF8A98AB),
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -567,22 +297,6 @@ class _LocationCard extends StatelessWidget {
   }
 }
 
-class _ProfileSummaryItem {
-  const _ProfileSummaryItem({
-    required this.titleKey,
-    required this.value,
-    required this.valueColor,
-    required this.icon,
-    required this.iconBackgroundColor,
-  });
-
-  final String titleKey;
-  final String value;
-  final Color valueColor;
-  final String icon;
-  final Color iconBackgroundColor;
-}
-
 class _SimpleStateCard extends StatelessWidget {
   const _SimpleStateCard({
     required this.message,
@@ -631,63 +345,9 @@ class _SimpleStateCard extends StatelessWidget {
   }
 }
 
-class _GroupedParcels {
-  const _GroupedParcels({
-    required this.processing,
-    required this.received,
-    required this.atHome,
-    required this.completed,
-  });
-
-  final List<HomeParcel> processing;
-  final List<HomeParcel> received;
-  final List<HomeParcel> atHome;
-  final List<HomeParcel> completed;
-
-  factory _GroupedParcels.from(List<HomeParcel> items) {
-    final processing = <HomeParcel>[];
-    final received = <HomeParcel>[];
-    final atHome = <HomeParcel>[];
-    final completed = <HomeParcel>[];
-
-    for (final item in items) {
-      final status = item.status.toLowerCase();
-      if (status == 'completed' || status == 'delivered') {
-        completed.add(item);
-      } else if (status == 'at_home') {
-        atHome.add(item);
-      } else if (status == 'arrived' ||
-          status == 'picked_up' ||
-          status == 'received') {
-        received.add(item);
-      } else {
-        processing.add(item);
-      }
-    }
-
-    return _GroupedParcels(
-      processing: processing,
-      received: received,
-      atHome: atHome,
-      completed: completed,
-    );
-  }
-}
-
 class _ProfileTextKeys {
   static const String userName = 'profile_user_name';
   static const String userEmail = 'profile_user_email';
-  static const String summaryProcessing = 'profile_summary_processing';
-  static const String summaryReceived = 'profile_summary_received';
-  static const String summaryAtHome = 'profile_summary_at_home';
-  static const String summaryCompleted = 'profile_summary_completed';
-  static const String activeParcelsTitle = 'profile_active_parcels_title';
-  static const String receivedHistoryTitle = 'profile_received_history_title';
-  static const String homeDeliveryHistoryTitle =
-      'profile_home_delivery_history_title';
-  static const String completedHistoryTitle = 'profile_completed_history_title';
-  static const String homeDeliveryEmptyMessage =
-      'profile_home_delivery_empty_message';
   static const String currentLocationTitle = 'profile_current_location_title';
   static const String currentLocationLabel = 'profile_current_location_label';
   static const String pinMapAction = 'profile_pin_map_action';
@@ -696,7 +356,4 @@ class _ProfileTextKeys {
   static const String savedMessage = 'profile_saved_message';
   static const String loadError = 'profile_load_error';
   static const String retry = 'common_retry';
-  static const String receivedHistoryEmpty = 'profile_received_history_empty';
-  static const String completedHistoryEmpty = 'profile_completed_history_empty';
-  static const String activeParcelsEmpty = 'profile_active_parcels_empty';
 }

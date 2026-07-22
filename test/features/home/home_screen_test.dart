@@ -105,6 +105,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(RefreshIndicator), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-track-status-button')),
+      findsNothing,
+    );
+    expect(find.text('Track'), findsNothing);
     expect(find.text('Sony WH-1000XM5 Headphones'), findsNothing);
     expect(find.text('#TH88291039'), findsOneWidget);
 

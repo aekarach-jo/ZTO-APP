@@ -353,10 +353,10 @@ void main() {
     expect(find.byKey(const ValueKey('send-summary-step')), findsOneWidget);
     expect(find.text('Forwarding payment'), findsOneWidget);
 
-    // 0.5 kg → billed 1 kg → fee 13,000 + VAT 910 = 13,910 kip
-    expect(find.text('₭13,000'), findsOneWidget);
-    expect(find.text('₭910'), findsOneWidget);
-    expect(find.text('₭13,910'), findsWidgets);
+    // 0.5 kg → billed 1 kg → shipping fee 13,000 kip (LAK, no VAT).
+    // Fee row + total row both render ₭13,000.
+    expect(find.text('₭13,000'), findsWidgets);
+    expect(find.text('₭910'), findsNothing);
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('send-confirm-forward-button')),

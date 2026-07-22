@@ -61,20 +61,30 @@ class ParcelPaymentScreen extends ConsumerStatefulWidget {
 
 enum _PaymentPhase { review, qr, success }
 
-class _PaymentJob {
-  _PaymentJob({required this.title, required this.amount, this.orderId, this.parcelId});
+/// One line in the payment summary (a single parcel). Amounts shown before the
+/// order is created are previews; the charged total comes from the order.
+class _PaymentLine {
+  const _PaymentLine({required this.title, required this.amount});
 
   final String title;
-  final String? parcelId;
-  String? orderId;
-  int amount;
+  final int amount;
 }
 
 class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
   static const Duration _pollInterval = Duration(seconds: 3);
   static const Duration _pollTimeout = Duration(minutes: 5);
 
-  late final List<_PaymentJob> _jobs;
+  /// Summary lines rendered in the review card and QR header.
+  late final List<_PaymentLine> _lines;
+
+  /// Laravel parcel ids to bundle into a single pickup order. Empty when an
+  /// order already exists (e.g. forward).
+  late final List<String> _pickupParcelIds;
+
+  /// Single order for the whole payment. Resolved from the existing order or
+  /// created once from [_pickupParcelIds].
+  String? _orderId;
+  late int _totalAmount;
 
   _PaymentPhase _phase = _PaymentPhase.review;
   String _selectedMethodId = 'bcel';
@@ -85,7 +95,6 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
   /// the "waiting for confirmation" indicator is revealed. It flips to true
   /// when the user taps the "I've paid" button.
   bool _paymentConfirmTapped = false;
-  int _currentIndex = 0;
   String? _qrString;
   Timer? _pollTimer;
   DateTime? _pollStartedAt;
@@ -94,24 +103,28 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
   void initState() {
     super.initState();
     final existingOrder = widget.args.existingOrder;
-    _jobs = existingOrder != null
-        ? [
-            _PaymentJob(
-              title: widget.args.itemName ??
-                  existingOrder.recipientName ??
-                  existingOrder.id,
-              amount: existingOrder.amount,
-              orderId: existingOrder.id,
-            ),
-          ]
-        : [
-            for (final parcel in widget.args.parcels)
-              _PaymentJob(
-                title: parcel.title,
-                amount: parcel.amount,
-                parcelId: parcel.parcelId,
-              ),
-          ];
+    if (existingOrder != null) {
+      _orderId = existingOrder.id;
+      _totalAmount = existingOrder.amount;
+      _pickupParcelIds = const [];
+      _lines = [
+        _PaymentLine(
+          title: widget.args.itemName ??
+              existingOrder.recipientName ??
+              existingOrder.id,
+          amount: existingOrder.amount,
+        ),
+      ];
+    } else {
+      _pickupParcelIds = [
+        for (final parcel in widget.args.parcels) parcel.parcelId,
+      ];
+      _lines = [
+        for (final parcel in widget.args.parcels)
+          _PaymentLine(title: parcel.title, amount: parcel.amount),
+      ];
+      _totalAmount = _lines.fold(0, (total, line) => total + line.amount);
+    }
   }
 
   @override
@@ -120,10 +133,9 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
     super.dispose();
   }
 
-  int get _totalAmount =>
-      _jobs.fold(0, (total, job) => total + job.amount);
-
-  _PaymentJob get _currentJob => _jobs[_currentIndex];
+  String get _qrTitle => _lines.length == 1
+      ? _lines.first.title
+      : 'pickup_payment_qr_items'.tr(args: ['${_lines.length}']);
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +171,7 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
       children: [
-        _SummaryCard(jobs: _jobs, totalAmount: _totalAmount),
+        _SummaryCard(lines: _lines, totalAmount: _totalAmount),
         SizedBox(height: 18.h),
         Text(
           'pickup_payment_method_label'.tr(),
@@ -192,22 +204,8 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
       children: [
-        if (_jobs.length > 1) ...[
-          Text(
-            'pickup_payment_qr_progress'.tr(
-              args: ['${_currentIndex + 1}', '${_jobs.length}'],
-            ),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: const Color(0xFF49576A),
-              fontSize: 14.sp,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          SizedBox(height: 10.h),
-        ],
         Text(
-          _currentJob.title,
+          _qrTitle,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: const Color(0xFF101010),
@@ -217,7 +215,7 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
         ),
         SizedBox(height: 6.h),
         Text(
-          formatLak(_currentJob.amount),
+          formatLak(_totalAmount),
           textAlign: TextAlign.center,
           style: TextStyle(
             color: AppTheme.brandBlueDark,
@@ -286,7 +284,7 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
           Center(
             child: TextButton(
               key: const ValueKey('pickup-payment-new-qr-button'),
-              onPressed: _isProcessing ? null : () => _startJob(_currentIndex),
+              onPressed: _isProcessing ? null : _startPayment,
               child: Text('pickup_payment_new_qr_button'.tr()),
             ),
           ),
@@ -392,35 +390,37 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
   }
 
   Future<void> _handlePay() async {
-    if (_jobs.isEmpty) {
+    if (_orderId == null && _pickupParcelIds.isEmpty) {
       return;
     }
-    await _startJob(0);
+    await _startPayment();
   }
 
-  Future<void> _startJob(int index) async {
+  /// Creates the pickup order once (if needed) then initiates onepay and shows
+  /// the QR. Re-callable to regenerate the QR after a timeout without creating
+  /// another order.
+  Future<void> _startPayment() async {
     final repository = ref.read(paymentRepositoryProvider);
-    final job = _jobs[index];
 
     setState(() {
       _isProcessing = true;
       _isTimedOut = false;
-      _currentIndex = index;
     });
     _pollTimer?.cancel();
 
     try {
-      if (job.orderId == null) {
+      if (_orderId == null) {
         final order = await repository.createPickupOrder(
-          parcelId: job.parcelId!,
-          amount: job.amount,
+          parcelIds: _pickupParcelIds,
         );
-        job.orderId = order.id;
-        job.amount = order.amount;
+        _orderId = order.id;
+        if (order.amount > 0) {
+          _totalAmount = order.amount;
+        }
       }
 
       final initiation = await repository.initiatePayment(
-        orderId: job.orderId!,
+        orderId: _orderId!,
         method: PaymentMethods.onepay,
       );
 
@@ -433,17 +433,17 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
         _qrString = initiation.qrString;
         _paymentConfirmTapped = false;
       });
-      _startPolling(job.orderId!);
+      _startPolling(_orderId!);
     } on DioException catch (error) {
       if (!mounted) {
         return;
       }
       if (error.response?.statusCode == 409) {
-        // Order already paid — treat as success and continue.
+        // Order already paid — treat as success.
         setState(() {
           _isProcessing = false;
         });
-        _advanceAfterPaid();
+        _markPaid();
         return;
       }
       setState(() {
@@ -486,7 +486,7 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
         }
         if (status.isPaid) {
           timer.cancel();
-          _advanceAfterPaid();
+          _markPaid();
         }
       } catch (_) {
         // Transient polling errors are ignored; the next tick retries.
@@ -501,7 +501,7 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
       _paymentConfirmTapped = true;
     });
 
-    final orderId = _currentJob.orderId;
+    final orderId = _orderId;
     if (orderId == null) {
       return;
     }
@@ -514,18 +514,15 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
       }
       if (status.isPaid) {
         _pollTimer?.cancel();
-        _advanceAfterPaid();
+        _markPaid();
       }
     } catch (_) {
       // Ignore; the periodic poll will retry on its next tick.
     }
   }
 
-  void _advanceAfterPaid() {
-    if (_currentIndex + 1 < _jobs.length) {
-      _startJob(_currentIndex + 1);
-      return;
-    }
+  void _markPaid() {
+    _pollTimer?.cancel();
     setState(() {
       _phase = _PaymentPhase.success;
       _qrString = null;
@@ -540,9 +537,9 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.jobs, required this.totalAmount});
+  const _SummaryCard({required this.lines, required this.totalAmount});
 
-  final List<_PaymentJob> jobs;
+  final List<_PaymentLine> lines;
   final int totalAmount;
 
   @override
@@ -556,11 +553,11 @@ class _SummaryCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          for (final job in jobs) ...[
+          for (final line in lines) ...[
             _SummaryRow(
               label: 'pickup_payment_item_label'.tr(),
-              value: job.title,
-              trailing: formatLak(job.amount),
+              value: line.title,
+              trailing: formatLak(line.amount),
             ),
             SizedBox(height: 12.h),
           ],

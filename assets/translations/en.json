@@ -121,6 +121,7 @@
   "pickup_payment_card_coming_soon": "Coming soon",
   "pickup_payment_card_unavailable": "Credit card payment is coming soon. Please use BCEL ONE",
   "pickup_payment_qr_progress": "Parcel {} of {}",
+  "pickup_payment_qr_items": "{} parcels",
   "pickup_payment_waiting": "Waiting for payment confirmation...",
   "pickup_payment_qr_expired": "QR code expired. Please generate a new QR code",
   "pickup_payment_new_qr_button": "Generate new QR",

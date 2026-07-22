@@ -80,12 +80,16 @@ void main() {
                 'data': {
                   'id': 'order-uuid-1',
                   'type': 'forward',
-                  'paymentStatus': 'pending',
-                  'amount': 16050,
+                  'amount': 40000,
                   'currency': 'LAK',
-                  'weight': 1.3,
-                  'recipientName': 'Jane Doe',
-                  'laravelParcelId': 999053943084,
+                  'items': [
+                    {
+                      'laravelParcelId': 999053943084,
+                      'price': 25000,
+                      'shippingFee': 15000,
+                      'itemTotal': 40000,
+                    },
+                  ],
                 },
               },
             ),
@@ -98,8 +102,7 @@ void main() {
 
     final order = await repository.createForwardRequest(
       const CreateForwardRequest(
-        parcelId: 'parcel-123',
-        weight: 1.3,
+        parcelId: '999053943084',
         recipientName: 'Jane Doe',
         recipientPhone: '0891234567',
         recipientAddress: '123 Main Road',
@@ -111,21 +114,26 @@ void main() {
     );
 
     expect(captured.method, 'POST');
-    expect(captured.path, '/parcels/parcel-123/forward');
+    expect(captured.path, '/orders/forward');
     expect(captured.data, {
-      'weight': 1.3,
-      'recipientName': 'Jane Doe',
-      'recipientPhone': '0891234567',
-      'recipientAddress': '123 Main Road',
-      'courierName': 'Flash',
-      'branchName': 'VTE-01',
-      'lat': 17.9757,
-      'lng': 102.6331,
+      'parcels': [
+        {
+          'laravelParcelId': 999053943084,
+          'recipientName': 'Jane Doe',
+          'recipientPhone': '0891234567',
+          'recipientAddress': '123 Main Road',
+          'courierName': 'Flash',
+          'branchName': 'VTE-01',
+          'lat': 17.9757,
+          'lng': 102.6331,
+        },
+      ],
     });
     expect(order.id, 'order-uuid-1');
     expect(order.type, 'forward');
-    expect(order.amount, 16050);
-    expect(order.paymentStatus, 'pending');
+    expect(order.amount, 40000);
+    expect(order.items.single.laravelParcelId, '999053943084');
+    expect(order.items.single.shippingFee, 15000);
   });
 
   test(

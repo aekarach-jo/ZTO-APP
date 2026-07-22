@@ -75,7 +75,6 @@ class SendParcelItem {
 class CreateForwardRequest {
   const CreateForwardRequest({
     required this.parcelId,
-    required this.weight,
     required this.recipientName,
     required this.recipientPhone,
     required this.recipientAddress,
@@ -85,8 +84,9 @@ class CreateForwardRequest {
     required this.longitude,
   });
 
+  /// Laravel parcel id. The backend resolves price and weight from it, so the
+  /// app never sends price/weight.
   final String parcelId;
-  final double weight;
   final String recipientName;
   final String recipientPhone;
   final String recipientAddress;
@@ -94,6 +94,19 @@ class CreateForwardRequest {
   final String branchName;
   final double latitude;
   final double longitude;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'laravelParcelId': asLaravelParcelId(parcelId),
+      'recipientName': recipientName,
+      'recipientPhone': recipientPhone,
+      if (recipientAddress.isNotEmpty) 'recipientAddress': recipientAddress,
+      'courierName': courierName,
+      if (branchName.isNotEmpty) 'branchName': branchName,
+      'lat': latitude,
+      'lng': longitude,
+    };
+  }
 }
 
 class SendRepository {
@@ -110,22 +123,14 @@ class SendRepository {
         .toList(growable: false);
   }
 
+  /// Creates a forward order. The send flow forwards one parcel at a time, but
+  /// the endpoint accepts many, so the single parcel is wrapped in an array.
   Future<ParcelOrder> createForwardRequest(CreateForwardRequest request) async {
-    final payload = <String, dynamic>{
-      'weight': request.weight,
-      'recipientName': request.recipientName,
-      'recipientPhone': request.recipientPhone,
-      if (request.recipientAddress.isNotEmpty)
-        'recipientAddress': request.recipientAddress,
-      'courierName': request.courierName,
-      if (request.branchName.isNotEmpty) 'branchName': request.branchName,
-      'lat': request.latitude,
-      'lng': request.longitude,
-    };
-
     final response = await _dio.post<dynamic>(
-      '/parcels/${request.parcelId}/forward',
-      data: payload,
+      '/orders/forward',
+      data: <String, dynamic>{
+        'parcels': [request.toJson()],
+      },
     );
     return ParcelOrder.fromResponse(response.data);
   }

@@ -121,6 +121,7 @@
   "pickup_payment_card_coming_soon": "ຈະເປີດໃຫ້ໃຊ້ໄວໆນີ້",
   "pickup_payment_card_unavailable": "ບັດເຄຣດິດຍັງບໍ່ພ້ອມໃຊ້ງານ, ກະລຸນາໃຊ້ BCEL ONE",
   "pickup_payment_qr_progress": "ພັດສະດຸ {} ຈາກ {}",
+  "pickup_payment_qr_items": "{} ພັດສະດຸ",
   "pickup_payment_waiting": "ກຳລັງລໍຖ້າການຢືນຢັນການຊຳລະເງິນ...",
   "pickup_payment_qr_expired": "QR ໝົດອາຍຸ, ກະລຸນາສ້າງ QR ໃໝ່",
   "pickup_payment_new_qr_button": "ສ້າງ QR ໃໝ່",

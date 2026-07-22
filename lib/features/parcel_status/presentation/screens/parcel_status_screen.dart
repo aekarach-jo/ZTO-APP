@@ -17,14 +17,6 @@ class ParcelStatusScreen extends ConsumerStatefulWidget {
 }
 
 class _ParcelStatusScreenState extends ConsumerState<ParcelStatusScreen> {
-  ParcelStatusCategory _selectedCategory = ParcelStatusCategory.inProgress;
-
-  static const List<ParcelStatusCategory> _categories = [
-    ParcelStatusCategory.inProgress,
-    ParcelStatusCategory.selfPickup,
-    ParcelStatusCategory.forwarded,
-  ];
-
   @override
   Widget build(BuildContext context) {
     final statusAsync = ref.watch(parcelStatusProvider);
@@ -35,7 +27,11 @@ class _ParcelStatusScreenState extends ConsumerState<ParcelStatusScreen> {
         child: RefreshIndicator(
           onRefresh: () => ref.refresh(parcelStatusProvider.future),
           child: statusAsync.when(
-            data: (page) => _buildContent(page),
+            data: (page) => ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
+              children: [ParcelStatusSection(page: page)],
+            ),
             loading: () => ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               children: const [
@@ -61,13 +57,39 @@ class _ParcelStatusScreenState extends ConsumerState<ParcelStatusScreen> {
       ),
     );
   }
+}
 
-  Widget _buildContent(ParcelStatusPage page) {
-    final items = page.forCategory(_selectedCategory);
+/// Shared status summary and parcel cards used by both the status route and
+/// the profile tab. Keeping this in one widget ensures both surfaces render
+/// the same API model and parcel name.
+class ParcelStatusSection extends StatefulWidget {
+  const ParcelStatusSection({
+    super.key,
+    required this.page,
+    this.summaryKeyPrefix = 'parcel-status-count',
+  });
 
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
+  final ParcelStatusPage page;
+  final String summaryKeyPrefix;
+
+  @override
+  State<ParcelStatusSection> createState() => _ParcelStatusSectionState();
+}
+
+class _ParcelStatusSectionState extends State<ParcelStatusSection> {
+  ParcelStatusCategory _selectedCategory = ParcelStatusCategory.inProgress;
+
+  static const List<ParcelStatusCategory> _categories = [
+    ParcelStatusCategory.inProgress,
+    ParcelStatusCategory.selfPickup,
+    ParcelStatusCategory.forwarded,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final items = widget.page.forCategory(_selectedCategory);
+
+    return Column(
       children: [
         Row(
           children: [
@@ -75,10 +97,10 @@ class _ParcelStatusScreenState extends ConsumerState<ParcelStatusScreen> {
               Expanded(
                 child: _CountCard(
                   cardKey: ValueKey(
-                    'parcel-status-count-${_categories[i].name}',
+                    '${widget.summaryKeyPrefix}-${_categories[i].name}',
                   ),
                   category: _categories[i],
-                  count: page.counts.forCategory(_categories[i]),
+                  count: widget.page.counts.forCategory(_categories[i]),
                   selected: _selectedCategory == _categories[i],
                   onTap: () {
                     setState(() {
@@ -222,7 +244,10 @@ class _StatusParcelCard extends StatelessWidget {
               ),
               if (item.weight != null)
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 10.w,
+                    vertical: 4.h,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFEAF5FF),
                     borderRadius: BorderRadius.circular(14.r),

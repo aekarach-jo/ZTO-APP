@@ -9,7 +9,33 @@ abstract final class PaymentMethods {
   static const String creditCard = 'credit_card';
 }
 
-/// Order created from `POST /parcels/{id}/pickup` or `POST /parcels/{id}/forward`.
+/// A single parcel line inside an order (`data.items[]`). One order can carry
+/// many parcels; each has its own price, shipping fee and total.
+class OrderItem {
+  const OrderItem({
+    required this.laravelParcelId,
+    required this.price,
+    required this.shippingFee,
+    required this.itemTotal,
+  });
+
+  final String laravelParcelId;
+  final int price;
+  final int shippingFee;
+  final int itemTotal;
+
+  factory OrderItem.fromJson(Map<String, dynamic> json) {
+    return OrderItem(
+      laravelParcelId: (json['laravelParcelId'] ?? '').toString(),
+      price: _readInt(json['price']) ?? 0,
+      shippingFee: _readInt(json['shippingFee']) ?? 0,
+      itemTotal: _readInt(json['itemTotal']) ?? 0,
+    );
+  }
+}
+
+/// Order created from `POST /orders/pickup` or `POST /orders/forward`.
+/// One order may cover several parcels (see [items]); [amount] is the total.
 class ParcelOrder {
   const ParcelOrder({
     required this.id,
@@ -19,6 +45,7 @@ class ParcelOrder {
     this.currency = 'LAK',
     this.weight,
     this.recipientName,
+    this.items = const [],
   });
 
   final String id;
@@ -28,10 +55,13 @@ class ParcelOrder {
   final String currency;
   final double? weight;
   final String? recipientName;
+  final List<OrderItem> items;
 
   bool get isPaid => paymentStatus == 'paid';
+  bool get isForward => type == 'forward';
 
   factory ParcelOrder.fromJson(Map<String, dynamic> json) {
+    final rawItems = json['items'];
     return ParcelOrder(
       id: (json['id'] ?? '').toString(),
       type: (json['type'] ?? '').toString(),
@@ -40,6 +70,12 @@ class ParcelOrder {
       currency: (json['currency'] ?? 'LAK').toString(),
       weight: _readDouble(json['weight']),
       recipientName: json['recipientName']?.toString(),
+      items: rawItems is List
+          ? rawItems
+                .whereType<Map<String, dynamic>>()
+                .map(OrderItem.fromJson)
+                .toList(growable: false)
+          : const [],
     );
   }
 
@@ -93,26 +129,21 @@ class OrderPaymentStatus {
   }
 }
 
-/// Forward service fee preview. The amount actually charged must come from
-/// the created order (`ParcelOrder.amount`).
+/// Forward shipping-fee preview (LAK, no VAT). The amount actually charged
+/// must come from the created order (`ParcelOrder.amount`), which also adds the
+/// parcel price the backend resolves from Laravel.
 class ForwardFeeQuote {
-  const ForwardFeeQuote({
-    required this.billableKg,
-    required this.fee,
-    required this.vat,
-  });
+  const ForwardFeeQuote({required this.billableKg, required this.fee});
 
   final int billableKg;
   final int fee;
-  final int vat;
 
-  int get total => fee + vat;
+  int get total => fee;
 
   factory ForwardFeeQuote.fromWeight(double weightKg) {
     final billableKg = weightKg <= 1 ? 1 : weightKg.ceil();
     final fee = 13000 + (billableKg - 1) * 2000;
-    final vat = (fee * 0.07).round();
-    return ForwardFeeQuote(billableKg: billableKg, fee: fee, vat: vat);
+    return ForwardFeeQuote(billableKg: billableKg, fee: fee);
   }
 }
 
@@ -121,13 +152,14 @@ class PaymentRepository {
 
   final Dio _dio;
 
+  /// Creates a single pickup order covering all [parcelIds] (Laravel ids).
+  /// The backend resolves each parcel's price and returns the order total.
   Future<ParcelOrder> createPickupOrder({
-    required String parcelId,
-    int amount = 0,
+    required List<String> parcelIds,
   }) async {
     final response = await _dio.post<dynamic>(
-      '/parcels/$parcelId/pickup',
-      data: {'amount': amount},
+      '/orders/pickup',
+      data: {'parcelIds': parcelIds.map(asLaravelParcelId).toList()},
     );
     return ParcelOrder.fromResponse(response.data);
   }
@@ -160,6 +192,12 @@ Map<String, dynamic> unwrapDataEnvelope(dynamic data) {
     return inner;
   }
   return data;
+}
+
+/// Laravel parcel ids are large integers. Send them as numbers when they parse
+/// cleanly, falling back to the raw string for non-numeric ids.
+Object asLaravelParcelId(String id) {
+  return int.tryParse(id.trim()) ?? id;
 }
 
 int? _readInt(dynamic value) {

@@ -213,6 +213,7 @@ const Map<String, dynamic> kTestTranslations = {
   'pickup_payment_pay_button': 'Pay now {}',
   'pickup_payment_bcel_qr_caption': 'Save the image or scan via the BCEL ONE app',
   'pickup_payment_qr_progress': 'Parcel {} of {}',
+  'pickup_payment_qr_items': '{} parcels',
   'pickup_payment_waiting': 'Waiting for payment confirmation...',
   'pickup_payment_confirm_paid_button': "I've paid",
   'pickup_payment_qr_expired': 'QR code expired. Please generate a new QR code',

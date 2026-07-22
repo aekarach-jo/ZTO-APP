@@ -9,7 +9,7 @@ import '../../data/home_parcel_repository.dart';
 import '../../../main_layout/application/main_layout_navigation_provider.dart';
 import '../../../parcel_claim/presentation/screens/parcel_claim_screen.dart';
 import '../../../parcel_payment/presentation/screens/parcel_payment_screen.dart';
-import '../../../parcel_status/presentation/screens/parcel_status_screen.dart';
+import '../../../parcel_status/data/parcel_status_repository.dart';
 import '../../../send/application/send_forward_prefill_provider.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -39,32 +39,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'your_parcels'.tr(),
-                  style: TextStyle(
-                    fontSize: 26.sp,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF111111),
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                key: const ValueKey('home-track-status-button'),
-                onPressed: () => context.push(ParcelStatusScreen.routePath),
-                icon: Icon(Icons.local_shipping_outlined, size: 18.sp),
-                label: Text('status_track_action'.tr()),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppTheme.brandBlueDark,
-                  textStyle: TextStyle(
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'your_parcels'.tr(),
+            style: TextStyle(
+              fontSize: 26.sp,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF111111),
+            ),
           ),
           SizedBox(height: 12.h),
           _ClaimEntryCard(
@@ -155,6 +136,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     if (result == true && mounted) {
       ref.invalidate(homeParcelsProvider);
+      ref.invalidate(parcelStatusProvider);
     }
   }
 }

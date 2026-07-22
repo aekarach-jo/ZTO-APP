@@ -14,6 +14,7 @@ import 'package:zto_app/features/contact/data/chat_socket_service.dart';
 import 'package:zto_app/features/contact/data/contact_repository.dart';
 import 'package:zto_app/features/home/data/home_parcel_repository.dart';
 import 'package:zto_app/features/notifications/data/notification_repository.dart';
+import 'package:zto_app/features/parcel_status/data/parcel_status_repository.dart';
 import 'package:zto_app/features/send/data/send_repository.dart';
 import 'package:zto_app/features/staff/data/staff_parcel_repository.dart';
 import 'package:zto_app/features/auth/data/auth_repository.dart';
@@ -170,6 +171,22 @@ List<Override> _baseOverrides() {
         ),
       ];
     }),
+    parcelStatusProvider.overrideWith(
+      (ref) async => const ParcelStatusPage(
+        counts: ParcelStatusCounts(inProgress: 1, selfPickup: 0, forwarded: 0),
+        parcels: [
+          ParcelStatusItem(
+            id: '1',
+            trackNo: 'TH88291039',
+            name: 'Sony WH-1000XM5 Headphones',
+            status: 'pending',
+            step: 1,
+            category: ParcelStatusCategory.inProgress,
+            weight: 0.5,
+          ),
+        ],
+      ),
+    ),
     notificationsProvider.overrideWith((ref) async {
       return const [
         AppNotification(
@@ -583,7 +600,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.text('Somchai Rakdee'), findsOneWidget);
-    expect(find.byKey(const ValueKey('profile-summary-0')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('profile-summary-inProgress')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('customer contact tab renders contact screen', (tester) async {

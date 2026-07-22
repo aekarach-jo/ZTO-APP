@@ -11,6 +11,7 @@ import '../../features/home/data/home_parcel_repository.dart';
 import '../../features/main_layout/application/main_layout_navigation_provider.dart';
 import '../../features/main_layout/presentation/screens/main_layout_screen.dart';
 import '../../features/notifications/data/notification_repository.dart';
+import '../../features/parcel_status/data/parcel_status_repository.dart';
 import '../router/app_router.dart';
 
 const AndroidNotificationChannel
@@ -34,6 +35,7 @@ void refreshFcmRelatedProviders(
 ) {
   invalidate(notificationsProvider);
   invalidate(homeParcelsProvider);
+  invalidate(parcelStatusProvider);
 }
 
 Future<bool> _ensureFirebaseInitialized() async {
