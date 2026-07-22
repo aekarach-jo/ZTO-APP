@@ -5,6 +5,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zto_app/features/home/data/home_parcel_repository.dart';
 import 'package:zto_app/features/home/presentation/screens/home_screen.dart';
+import 'package:zto_app/features/main_layout/application/main_layout_navigation_provider.dart';
+import 'package:zto_app/features/send/application/send_forward_prefill_provider.dart';
 
 import '../../test_helpers/mock_asset_loader.dart';
 
@@ -155,7 +157,7 @@ void main() {
     expect(find.text('#TH88291040'), findsOneWidget);
   });
 
-  testWidgets('tapping parcel action shows not implemented snackbar', (
+  testWidgets('tapping forward pre-selects the parcel and requests send tab', (
     tester,
   ) async {
     await tester.pumpWidget(_buildTestApp(const HomeScreen()));
@@ -172,7 +174,13 @@ void main() {
     await tester.tap(actionButton);
     await tester.pump();
 
-    expect(find.text('This action is coming soon'), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(HomeScreen)),
+    );
+    // Forward pre-selects the parcel (id '2') and asks the shell to jump to
+    // the Send tab (index 1) instead of showing a "coming soon" snackbar.
+    expect(container.read(sendForwardPrefillProvider), '2');
+    expect(container.read(customerTabJumpTargetProvider), 1);
   });
 
   testWidgets('updates parcel actions when locale changes', (tester) async {

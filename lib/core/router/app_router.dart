@@ -12,6 +12,8 @@ import '../../features/auth/presentation/screens/reset_password_screen.dart';
 import '../../features/main_layout/presentation/screens/main_layout_screen.dart';
 import '../../features/parcel_claim/presentation/screens/parcel_claim_screen.dart';
 import '../../features/parcel_payment/presentation/screens/parcel_payment_screen.dart';
+import '../../features/parcel_status/presentation/screens/parcel_status_screen.dart';
+import '../../features/orders/presentation/screens/order_history_screen.dart';
 
 const String appStartupRoutePath = '/startup';
 
@@ -123,6 +125,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: ParcelClaimScreen.routePath,
         builder: (context, state) => const ParcelClaimScreen(),
+      ),
+      GoRoute(
+        path: ParcelStatusScreen.routePath,
+        builder: (context, state) => const ParcelStatusScreen(),
+      ),
+      GoRoute(
+        path: OrderHistoryScreen.routePath,
+        builder: (context, state) => const OrderHistoryScreen(),
       ),
       GoRoute(
         path: ParcelPaymentScreen.routePath,

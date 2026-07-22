@@ -62,7 +62,7 @@ void main() {
     expect(parcels.last.weightKg, 1.2);
   });
 
-  test('createForwardRequest uses Swagger parcel forward endpoint', () async {
+  test('createForwardRequest posts NestJS forward payload and returns order', () async {
     final dio = Dio(BaseOptions(baseUrl: 'http://example.com'));
     late RequestOptions captured;
 
@@ -73,8 +73,21 @@ void main() {
           handler.resolve(
             Response<dynamic>(
               requestOptions: options,
-              statusCode: 200,
-              data: const <String, dynamic>{'ok': true},
+              statusCode: 201,
+              data: const <String, dynamic>{
+                'success': true,
+                'message': 'Forward order created',
+                'data': {
+                  'id': 'order-uuid-1',
+                  'type': 'forward',
+                  'paymentStatus': 'pending',
+                  'amount': 16050,
+                  'currency': 'LAK',
+                  'weight': 1.3,
+                  'recipientName': 'Jane Doe',
+                  'laravelParcelId': 999053943084,
+                },
+              },
             ),
           );
         },
@@ -83,32 +96,36 @@ void main() {
 
     final repository = SendRepository(dio: dio);
 
-    await repository.createForwardRequest(
+    final order = await repository.createForwardRequest(
       const CreateForwardRequest(
         parcelId: 'parcel-123',
+        weight: 1.3,
         recipientName: 'Jane Doe',
         recipientPhone: '0891234567',
         recipientAddress: '123 Main Road',
-        courier: 'Flash',
-        branch: 'VTE-01',
+        courierName: 'Flash',
+        branchName: 'VTE-01',
         latitude: 17.9757,
         longitude: 102.6331,
-        paymentMethod: 'bcel',
       ),
     );
 
     expect(captured.method, 'POST');
     expect(captured.path, '/parcels/parcel-123/forward');
     expect(captured.data, {
-      'parcelId': 'parcel-123',
+      'weight': 1.3,
       'recipientName': 'Jane Doe',
       'recipientPhone': '0891234567',
       'recipientAddress': '123 Main Road',
-      'courier': 'Flash',
-      'branch': 'VTE-01',
-      'paymentMethod': 'bcel',
-      'location': {'latitude': 17.9757, 'longitude': 102.6331},
+      'courierName': 'Flash',
+      'branchName': 'VTE-01',
+      'lat': 17.9757,
+      'lng': 102.6331,
     });
+    expect(order.id, 'order-uuid-1');
+    expect(order.type, 'forward');
+    expect(order.amount, 16050);
+    expect(order.paymentStatus, 'pending');
   });
 
   test(

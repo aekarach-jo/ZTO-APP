@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/parcel_response_parser.dart';
 import '../../../core/network/network_providers.dart';
+import '../../parcel_payment/data/payment_repository.dart';
 
 class SendParcelItem {
   const SendParcelItem({
@@ -74,25 +75,25 @@ class SendParcelItem {
 class CreateForwardRequest {
   const CreateForwardRequest({
     required this.parcelId,
+    required this.weight,
     required this.recipientName,
     required this.recipientPhone,
     required this.recipientAddress,
-    required this.courier,
-    required this.branch,
+    required this.courierName,
+    required this.branchName,
     required this.latitude,
     required this.longitude,
-    required this.paymentMethod,
   });
 
   final String parcelId;
+  final double weight;
   final String recipientName;
   final String recipientPhone;
   final String recipientAddress;
-  final String courier;
-  final String branch;
+  final String courierName;
+  final String branchName;
   final double latitude;
   final double longitude;
-  final String paymentMethod;
 }
 
 class SendRepository {
@@ -109,25 +110,24 @@ class SendRepository {
         .toList(growable: false);
   }
 
-  Future<void> createForwardRequest(CreateForwardRequest request) async {
+  Future<ParcelOrder> createForwardRequest(CreateForwardRequest request) async {
     final payload = <String, dynamic>{
-      'parcelId': request.parcelId,
+      'weight': request.weight,
       'recipientName': request.recipientName,
       'recipientPhone': request.recipientPhone,
-      'recipientAddress': request.recipientAddress,
-      'courier': request.courier,
-      'branch': request.branch,
-      'paymentMethod': request.paymentMethod,
-      'location': {
-        'latitude': request.latitude,
-        'longitude': request.longitude,
-      },
+      if (request.recipientAddress.isNotEmpty)
+        'recipientAddress': request.recipientAddress,
+      'courierName': request.courierName,
+      if (request.branchName.isNotEmpty) 'branchName': request.branchName,
+      'lat': request.latitude,
+      'lng': request.longitude,
     };
 
-    await _dio.post<dynamic>(
+    final response = await _dio.post<dynamic>(
       '/parcels/${request.parcelId}/forward',
       data: payload,
     );
+    return ParcelOrder.fromResponse(response.data);
   }
 
   List<dynamic> _extractList(dynamic data) {

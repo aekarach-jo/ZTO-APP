@@ -12,6 +12,7 @@ class HomeParcel {
     required this.weightLabel,
     required this.dateLabel,
     required this.status,
+    this.price,
   });
 
   final String id;
@@ -20,6 +21,9 @@ class HomeParcel {
   final String weightLabel;
   final String dateLabel;
   final String status;
+
+  /// ค่าส่งเป็นกีบ (ใช้เป็น amount ตอนสร้าง pickup order)
+  final int? price;
 
   factory HomeParcel.fromJson(
     Map<String, dynamic> json, {
@@ -74,7 +78,27 @@ class HomeParcel {
       weightLabel: weightLabel,
       dateLabel: dateLabel,
       status: status.toLowerCase(),
+      price: _readInt(json, const ['price']),
     );
+  }
+
+  static int? _readInt(Map<String, dynamic> json, List<String> keys) {
+    for (final key in keys) {
+      final value = json[key];
+      if (value is int) {
+        return value;
+      }
+      if (value is num) {
+        return value.round();
+      }
+      if (value is String) {
+        final parsed = num.tryParse(value.trim());
+        if (parsed != null) {
+          return parsed.round();
+        }
+      }
+    }
+    return null;
   }
 
   static String? _readString(Map<String, dynamic> json, List<String> keys) {

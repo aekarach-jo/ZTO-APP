@@ -270,7 +270,7 @@ void main() {
     expect(find.byKey(const ValueKey('send-pin-step')), findsOneWidget);
   });
 
-  testWidgets('moves to payment step and allows switching payment method', (
+  testWidgets('moves to payment step and shows LAK fee breakdown', (
     tester,
   ) async {
     await tester.pumpWidget(_buildTestApp(const SendScreen()));
@@ -353,13 +353,16 @@ void main() {
     expect(find.byKey(const ValueKey('send-summary-step')), findsOneWidget);
     expect(find.text('Forwarding payment'), findsOneWidget);
 
+    // 0.5 kg → billed 1 kg → fee 13,000 + VAT 910 = 13,910 kip
+    expect(find.text('₭13,000'), findsOneWidget);
+    expect(find.text('₭910'), findsOneWidget);
+    expect(find.text('₭13,910'), findsWidgets);
+
     await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('send-payment-method-bcel')),
+      find.byKey(const ValueKey('send-confirm-forward-button')),
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('send-payment-method-bcel')));
     await tester.pumpAndSettle();
 
     expect(

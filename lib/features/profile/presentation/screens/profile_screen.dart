@@ -2,9 +2,11 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../home/data/home_parcel_repository.dart';
+import '../../../orders/presentation/screens/order_history_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -118,6 +120,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 actionLabel: _ProfileTextKeys.retry,
                 onAction: () => ref.invalidate(homeParcelsProvider),
               ),
+            ),
+          ),
+          SizedBox(height: 14.h),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14.w),
+            child: _OrderHistoryEntry(
+              onTap: () => context.push(OrderHistoryScreen.routePath),
             ),
           ),
           SizedBox(height: 14.h),
@@ -381,6 +390,80 @@ class _ParcelCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OrderHistoryEntry extends StatelessWidget {
+  const _OrderHistoryEntry({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: const ValueKey('profile-order-history-entry'),
+        borderRadius: BorderRadius.circular(18.r),
+        onTap: onTap,
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18.r),
+            border: Border.all(color: const Color(0xFFE2E8F1)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44.w,
+                height: 44.w,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE7F2FF),
+                  borderRadius: BorderRadius.circular(13.r),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.receipt_long_outlined,
+                  color: AppTheme.brandBlueDark,
+                  size: 22.sp,
+                ),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'order_history_title'.tr(),
+                      style: TextStyle(
+                        color: const Color(0xFF111111),
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 2.h),
+                    Text(
+                      'order_history_subtitle'.tr(),
+                      style: TextStyle(
+                        color: const Color(0xFF8A99AD),
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: const Color(0xFFB4C0D0),
+                size: 22.sp,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

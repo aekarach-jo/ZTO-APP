@@ -6,8 +6,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../data/home_parcel_repository.dart';
+import '../../../main_layout/application/main_layout_navigation_provider.dart';
 import '../../../parcel_claim/presentation/screens/parcel_claim_screen.dart';
 import '../../../parcel_payment/presentation/screens/parcel_payment_screen.dart';
+import '../../../parcel_status/presentation/screens/parcel_status_screen.dart';
+import '../../../send/application/send_forward_prefill_provider.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -17,8 +20,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  static const double _pickupFeePerParcel = 150.0;
-
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -38,13 +39,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
         children: [
-          Text(
-            'your_parcels'.tr(),
-            style: TextStyle(
-              fontSize: 26.sp,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF111111),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'your_parcels'.tr(),
+                  style: TextStyle(
+                    fontSize: 26.sp,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF111111),
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                key: const ValueKey('home-track-status-button'),
+                onPressed: () => context.push(ParcelStatusScreen.routePath),
+                icon: Icon(Icons.local_shipping_outlined, size: 18.sp),
+                label: Text('status_track_action'.tr()),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppTheme.brandBlueDark,
+                  textStyle: TextStyle(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
           ),
           SizedBox(height: 12.h),
           _ClaimEntryCard(
@@ -86,7 +106,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       cardKey: ValueKey('home-parcel-group-card-$groupIndex'),
                       items: groupedParcels[groupIndex].items,
                       onPickup: (items) => _openPickupPayment(context, items),
-                      onForward: (_) => _showNotImplementedSnack(context),
+                      onForward: _startForward,
                     ),
                     if (groupIndex != groupedParcels.length - 1)
                       SizedBox(height: 18.h),
@@ -103,24 +123,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  void _showNotImplementedSnack(BuildContext context) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('action_not_implemented'.tr())));
-  }
-
-  void _openPickupPayment(BuildContext context, List<_ParcelItem> items) {
+  /// Forward reuses the Send flow: pre-select the parcel then jump to the
+  /// Send tab, landing directly on the recipient-details step.
+  void _startForward(List<_ParcelItem> items) {
     if (items.isEmpty) {
       return;
     }
-    final itemName = items.length == 1
-        ? items.first.title
-        : 'pickup_payment_item_count'.tr(args: ['${items.length}']);
-    final amount = _pickupFeePerParcel * items.length;
-    context.push(
+    ref.read(sendForwardPrefillProvider.notifier).state = items.first.id;
+    ref.read(customerTabJumpTargetProvider.notifier).state = 1;
+  }
+
+  Future<void> _openPickupPayment(
+    BuildContext context,
+    List<_ParcelItem> items,
+  ) async {
+    if (items.isEmpty) {
+      return;
+    }
+    final result = await context.push(
       ParcelPaymentScreen.routePath,
-      extra: ParcelPaymentArgs(itemName: itemName, amount: amount),
+      extra: ParcelPaymentArgs.pickup(
+        parcels: [
+          for (final item in items)
+            PickupPaymentParcel(
+              parcelId: item.id,
+              title: item.title,
+              amount: item.price ?? 0,
+            ),
+        ],
+      ),
     );
+    if (result == true && mounted) {
+      ref.invalidate(homeParcelsProvider);
+    }
   }
 }
 
@@ -537,6 +572,7 @@ class _EmptyState extends StatelessWidget {
 
 class _ParcelItem {
   const _ParcelItem({
+    required this.id,
     required this.title,
     required this.trackNo,
     required this.weight,
@@ -544,9 +580,11 @@ class _ParcelItem {
     required this.statusKey,
     required this.statusBackgroundColor,
     required this.statusForegroundColor,
+    this.price,
     this.showActions = false,
   });
 
+  final String id;
   final String title;
   final String trackNo;
   final String weight;
@@ -554,11 +592,13 @@ class _ParcelItem {
   final String statusKey;
   final Color statusBackgroundColor;
   final Color statusForegroundColor;
+  final int? price;
   final bool showActions;
 
   factory _ParcelItem.fromApi(HomeParcel parcel) {
     final statusStyle = _statusStyle(parcel.status);
     return _ParcelItem(
+      id: parcel.id,
       title: parcel.title,
       trackNo: parcel.trackingNo,
       weight: parcel.weightLabel,
@@ -566,6 +606,7 @@ class _ParcelItem {
       statusKey: statusStyle.statusKey,
       statusBackgroundColor: statusStyle.backgroundColor,
       statusForegroundColor: statusStyle.foregroundColor,
+      price: parcel.price,
       showActions: statusStyle.showActions,
     );
   }

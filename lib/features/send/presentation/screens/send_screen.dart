@@ -3,11 +3,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/utils/lak_currency.dart';
+import '../../application/send_forward_prefill_provider.dart';
 import '../../data/send_repository.dart';
+import '../../../home/data/home_parcel_repository.dart';
 import '../../../main_layout/application/main_layout_navigation_provider.dart';
+import '../../../parcel_payment/data/payment_repository.dart';
+import '../../../parcel_payment/presentation/screens/parcel_payment_screen.dart';
 
 class SendScreen extends ConsumerStatefulWidget {
   const SendScreen({super.key});
@@ -27,27 +33,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   final _courierController = TextEditingController();
   final _branchController = TextEditingController();
   LatLng _pinLocation = const LatLng(17.9757, 102.6331);
-  String _selectedPaymentMethodId = _paymentMethods.first.id;
 
-  static const List<_PaymentMethodOption> _paymentMethods = [
-    _PaymentMethodOption(
-      id: 'card',
-      titleKey: _SendTextKeys.paymentCardTitle,
-      subtitleKey: _SendTextKeys.paymentCardSubtitle,
-      badgeText: 'VISA',
-      badgeColor: Color(0xFF1E2A84),
-    ),
-    _PaymentMethodOption(
-      id: 'bcel',
-      titleKey: _SendTextKeys.paymentBcelTitle,
-      subtitleKey: _SendTextKeys.paymentBcelSubtitle,
-      badgeText: 'BCEL',
-      badgeColor: Color(0xFFE71F30),
-    ),
-  ];
-
-  static const double _forwardingFee = 120.00;
-  static const double _vatRate = 0.07;
+  /// Order ที่สร้างไว้แล้วสำหรับ flow ปัจจุบัน — กันการสร้าง order ซ้ำ
+  /// ถ้าผู้ใช้ย้อนกลับจากหน้าชำระเงินแล้วกดยืนยันอีกครั้ง
+  ParcelOrder? _createdOrder;
 
   bool get _isRecipientFormComplete {
     final phoneDigits = _recipientPhoneController.text.replaceAll(
@@ -74,6 +63,20 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   @override
   Widget build(BuildContext context) {
     final parcelsAsync = ref.watch(sendParcelsProvider);
+
+    // Forward tapped in the Parcel tab: pre-select that parcel and jump
+    // straight to the recipient-details step.
+    ref.listen<String?>(sendForwardPrefillProvider, (previous, next) {
+      if (next == null) {
+        return;
+      }
+      ref.read(sendForwardPrefillProvider.notifier).state = null;
+      setState(() {
+        _resetFlow();
+        _selectedParcelId = next;
+        _step = _SendStep.recipientDetails;
+      });
+    });
 
     return _step == _SendStep.selectParcel
         ? _buildSelectParcelStep(context, parcelsAsync)
@@ -127,6 +130,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                     onTap: () {
                       setState(() {
                         _selectedParcelId = items[i].id;
+                        _createdOrder = null;
                       });
                     },
                   ),
@@ -422,8 +426,8 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     if (selectedItem == null) {
       return _buildInvalidSelectionState();
     }
-    final vatAmount = _forwardingFee * _vatRate;
-    final totalAmount = _forwardingFee + vatAmount;
+    final weightKg = selectedItem.weightKg ?? 1.0;
+    final feeQuote = ForwardFeeQuote.fromWeight(weightKg);
 
     return _buildRefreshableListView(
       key: const ValueKey('send-summary-step'),
@@ -434,6 +438,8 @@ class _SendScreenState extends ConsumerState<SendScreen> {
           onBack: () {
             setState(() {
               _step = _SendStep.pinAddress;
+              // ข้อมูลผู้รับอาจถูกแก้ไข — order เดิมใช้ไม่ได้แล้ว
+              _createdOrder = null;
             });
           },
           backTooltip: _SendTextKeys.backTooltip.tr(),
@@ -468,7 +474,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               ),
               SizedBox(height: 6.h),
               Text(
-                _SendTextKeys.paymentDestination.tr(args: ['k (k)']),
+                _SendTextKeys.paymentDestination.tr(
+                  args: [_recipientAddressController.text.trim()],
+                ),
                 style: TextStyle(
                   color: const Color(0xFF758397),
                   fontSize: 14.sp,
@@ -477,7 +485,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               ),
               SizedBox(height: 2.h),
               Text(
-                _SendTextKeys.paymentWeightSize.tr(args: ['k', 'k']),
+                _SendTextKeys.paymentWeightBilled.tr(
+                  args: ['$weightKg', '${feeQuote.billableKg}'],
+                ),
                 style: TextStyle(
                   color: AppTheme.brandBlue,
                   fontSize: 14.sp,
@@ -489,12 +499,12 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               SizedBox(height: 12.h),
               _PriceRow(
                 label: _SendTextKeys.paymentFeeLabel.tr(),
-                amount: _formatBaht(_forwardingFee),
+                amount: formatLak(feeQuote.fee),
               ),
               SizedBox(height: 8.h),
               _PriceRow(
                 label: _SendTextKeys.paymentVatLabel.tr(),
-                amount: _formatBaht(vatAmount),
+                amount: formatLak(feeQuote.vat),
                 smallValue: true,
               ),
               SizedBox(height: 12.h),
@@ -506,40 +516,17 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               SizedBox(height: 12.h),
               _PriceRow(
                 label: _SendTextKeys.paymentTotalLabel.tr(),
-                amount: _formatBaht(totalAmount),
+                amount: formatLak(feeQuote.total),
                 highlight: true,
               ),
             ],
           ),
         ),
         SizedBox(height: 16.h),
-        Text(
-          _SendTextKeys.paymentMethodLabel.tr(),
-          style: TextStyle(
-            color: const Color(0xFF8B98AA),
-            fontSize: 13.sp,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        SizedBox(height: 10.h),
-        for (var i = 0; i < _paymentMethods.length; i++) ...[
-          _PaymentMethodCard(
-            key: ValueKey('send-payment-method-${_paymentMethods[i].id}'),
-            option: _paymentMethods[i],
-            selected: _selectedPaymentMethodId == _paymentMethods[i].id,
-            onTap: () {
-              setState(() {
-                _selectedPaymentMethodId = _paymentMethods[i].id;
-              });
-            },
-          ),
-          if (i != _paymentMethods.length - 1) SizedBox(height: 10.h),
-        ],
-        SizedBox(height: 16.h),
         _PrimaryActionButton(
           key: const ValueKey('send-confirm-forward-button'),
           label: _SendTextKeys.paymentConfirmButton.tr(
-            args: [_formatBaht(totalAmount)],
+            args: [formatLak(feeQuote.total)],
           ),
           enabled: !_isSubmitting,
           onPressed: () => _handleForwardConfirm(selectedItem),
@@ -609,23 +596,41 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     });
 
     try {
-      await ref
-          .read(sendRepositoryProvider)
-          .createForwardRequest(
-            CreateForwardRequest(
-              parcelId: selectedItem.id,
-              recipientName: _recipientNameController.text.trim(),
-              recipientPhone: _recipientPhoneController.text.trim(),
-              recipientAddress: _recipientAddressController.text.trim(),
-              courier: _courierController.text.trim(),
-              branch: _branchController.text.trim(),
-              latitude: _pinLocation.latitude,
-              longitude: _pinLocation.longitude,
-              paymentMethod: _selectedPaymentMethodId,
-            ),
-          );
+      final order =
+          _createdOrder ??
+          await ref
+              .read(sendRepositoryProvider)
+              .createForwardRequest(
+                CreateForwardRequest(
+                  parcelId: selectedItem.id,
+                  weight: selectedItem.weightKg ?? 1.0,
+                  recipientName: _recipientNameController.text.trim(),
+                  recipientPhone: _recipientPhoneController.text.trim(),
+                  recipientAddress: _recipientAddressController.text.trim(),
+                  courierName: _courierController.text.trim(),
+                  branchName: _branchController.text.trim(),
+                  latitude: _pinLocation.latitude,
+                  longitude: _pinLocation.longitude,
+                ),
+              );
+      _createdOrder = order;
 
       if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isSubmitting = false;
+      });
+
+      final result = await context.push(
+        ParcelPaymentScreen.routePath,
+        extra: ParcelPaymentArgs.forOrder(
+          order: order,
+          itemName: selectedItem.title,
+        ),
+      );
+
+      if (!mounted || result != true) {
         return;
       }
 
@@ -637,20 +642,18 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         _resetFlow();
       });
       ref.invalidate(sendParcelsProvider);
+      ref.invalidate(homeParcelsProvider);
       ref.read(customerTabJumpTargetProvider.notifier).state = 0;
     } catch (_) {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _isSubmitting = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_SendTextKeys.submitForwardError.tr())),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
     }
   }
 
@@ -658,16 +661,12 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     _selectedParcelId = null;
     _step = _SendStep.selectParcel;
     _pinLocation = const LatLng(17.9757, 102.6331);
-    _selectedPaymentMethodId = _paymentMethods.first.id;
+    _createdOrder = null;
     _recipientNameController.clear();
     _recipientPhoneController.clear();
     _recipientAddressController.clear();
     _courierController.clear();
     _branchController.clear();
-  }
-
-  String _formatBaht(double amount) {
-    return '฿${amount.toStringAsFixed(2)}';
   }
 
   void _showNotImplementedSnack(BuildContext context) {
@@ -997,89 +996,6 @@ class _PriceRow extends StatelessWidget {
   }
 }
 
-class _PaymentMethodCard extends StatelessWidget {
-  const _PaymentMethodCard({
-    super.key,
-    required this.option,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _PaymentMethodOption option;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16.r),
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(
-            color: selected ? AppTheme.brandBlue : const Color(0xFFDDE4EE),
-            width: selected ? 1.4 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 58.w,
-              height: 48.h,
-              decoration: BoxDecoration(
-                color: option.badgeColor,
-                borderRadius: BorderRadius.circular(10.r),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                option.badgeText,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            SizedBox(width: 12.w),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    option.titleKey.tr(),
-                    style: TextStyle(
-                      color: const Color(0xFF101010),
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    option.subtitleKey.tr(),
-                    style: TextStyle(
-                      color: const Color(0xFF7E8EA3),
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              selected ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: selected ? AppTheme.brandBlue : const Color(0xFFD3DBE7),
-              size: 22.sp,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SimpleStateCard extends StatelessWidget {
   const _SimpleStateCard({
     required this.icon,
@@ -1126,22 +1042,6 @@ class _SimpleStateCard extends StatelessWidget {
   }
 }
 
-class _PaymentMethodOption {
-  const _PaymentMethodOption({
-    required this.id,
-    required this.titleKey,
-    required this.subtitleKey,
-    required this.badgeText,
-    required this.badgeColor,
-  });
-
-  final String id;
-  final String titleKey;
-  final String subtitleKey;
-  final String badgeText;
-  final Color badgeColor;
-}
-
 class _SendTextKeys {
   static const String title = 'send_select_title';
   static const String subtitle = 'send_select_subtitle';
@@ -1166,15 +1066,10 @@ class _SendTextKeys {
   static const String paymentTitle = 'send_payment_title';
   static const String paymentOrderLabel = 'send_payment_order_label';
   static const String paymentDestination = 'send_payment_destination';
-  static const String paymentWeightSize = 'send_payment_weight_size';
+  static const String paymentWeightBilled = 'send_payment_weight_billed';
   static const String paymentFeeLabel = 'send_payment_fee_label';
   static const String paymentVatLabel = 'send_payment_vat_label';
   static const String paymentTotalLabel = 'send_payment_total_label';
-  static const String paymentMethodLabel = 'send_payment_method_label';
-  static const String paymentCardTitle = 'send_payment_card_title';
-  static const String paymentCardSubtitle = 'send_payment_card_subtitle';
-  static const String paymentBcelTitle = 'send_payment_bcel_title';
-  static const String paymentBcelSubtitle = 'send_payment_bcel_subtitle';
   static const String paymentConfirmButton = 'send_payment_confirm_button';
   static const String forwardSuccessMessage = 'send_forward_success_message';
   static const String mapPlaceholder = 'send_map_placeholder';
