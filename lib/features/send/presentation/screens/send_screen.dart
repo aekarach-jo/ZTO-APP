@@ -590,6 +590,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       _isSubmitting = true;
     });
 
+    // The customer pays only the shipping fee for forwarding, computed the same
+    // way as the summary card — not the parcel's own price.
+    final feeQuote = ForwardFeeQuote.fromWeight(selectedItem.weightKg ?? 1.0);
+
     try {
       final order =
           _createdOrder ??
@@ -621,6 +625,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         extra: ParcelPaymentArgs.forOrder(
           order: order,
           itemName: selectedItem.title,
+          amountOverride: feeQuote.total,
         ),
       );
 
@@ -639,7 +644,13 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       ref.invalidate(homeParcelsProvider);
       ref.invalidate(parcelStatusProvider);
       ref.read(customerTabJumpTargetProvider.notifier).state = 0;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // Surface the real cause: a failed POST /orders/forward otherwise looks
+      // like the screen "did nothing" after tapping confirm.
+      if (kDebugMode) {
+        debugPrint('[SendScreen] forward confirm failed: $error');
+        debugPrint('$stackTrace');
+      }
       if (!mounted) {
         return;
       }

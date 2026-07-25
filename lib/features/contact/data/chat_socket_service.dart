@@ -19,7 +19,11 @@ abstract class ChatSocket {
   void connect(String accessToken);
   void joinRoom(String roomId);
   void leaveRoom(String roomId);
-  void sendMessage({required String roomId, required String content});
+  void sendMessage({
+    required String roomId,
+    String content,
+    String? imageUrl,
+  });
   void disconnect();
   void dispose();
 }
@@ -137,14 +141,24 @@ class ChatSocketService implements ChatSocket {
   }
 
   /// Emits a `send-message` event. The server echoes the stored message back
-  /// via `new-message`, so callers should render from that stream.
+  /// via `new-message`, so callers should render from that stream. A message
+  /// may carry text ([content]), an [imageUrl] (from `POST /chat/upload`), or
+  /// both — the server requires at least one.
   @override
-  void sendMessage({required String roomId, required String content}) {
+  void sendMessage({
+    required String roomId,
+    String content = '',
+    String? imageUrl,
+  }) {
     final socket = _socket;
     if (socket == null || !socket.connected) {
       throw StateError('Chat socket is not connected');
     }
-    socket.emit('send-message', {'roomId': roomId, 'content': content});
+    socket.emit('send-message', {
+      'roomId': roomId,
+      if (content.isNotEmpty) 'content': content,
+      if (imageUrl != null && imageUrl.isNotEmpty) 'imageUrl': imageUrl,
+    });
   }
 
   @override

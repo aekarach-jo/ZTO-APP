@@ -15,6 +15,7 @@ import 'package:zto_app/features/contact/data/contact_repository.dart';
 import 'package:zto_app/features/home/data/home_parcel_repository.dart';
 import 'package:zto_app/features/notifications/data/notification_repository.dart';
 import 'package:zto_app/features/parcel_status/data/parcel_status_repository.dart';
+import 'package:zto_app/features/profile/data/profile_repository.dart';
 import 'package:zto_app/features/send/data/send_repository.dart';
 import 'package:zto_app/features/staff/data/staff_parcel_repository.dart';
 import 'package:zto_app/features/auth/data/auth_repository.dart';
@@ -143,7 +144,11 @@ class _NoopChatSocket implements ChatSocket {
   void leaveRoom(String roomId) {}
 
   @override
-  void sendMessage({required String roomId, required String content}) {}
+  void sendMessage({
+    required String roomId,
+    String content = '',
+    String? imageUrl,
+  }) {}
 
   @override
   void disconnect() {}
@@ -159,6 +164,15 @@ class _NoopChatSocket implements ChatSocket {
 List<Override> _baseOverrides() {
   return [
     authRepositoryProvider.overrideWithValue(const _FakeAuthRepository()),
+    userProfileProvider.overrideWith((ref) async {
+      return const UserProfile(
+        id: 'u1',
+        displayName: 'Somchai Rakdee',
+        email: 'somchai@email.com',
+        phone: '02000000',
+        profileImage: '',
+      );
+    }),
     homeParcelsProvider.overrideWith((ref) async {
       return const [
         HomeParcel(

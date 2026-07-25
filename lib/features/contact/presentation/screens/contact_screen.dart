@@ -1,10 +1,14 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/config/app_env.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/contact_repository.dart';
 
@@ -38,6 +42,8 @@ class ContactScreen extends ConsumerStatefulWidget {
 class _ContactScreenState extends ConsumerState<ContactScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ImagePicker _imagePicker = ImagePicker();
+  bool _uploadingImage = false;
 
   @override
   void dispose() {
@@ -128,6 +134,33 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
               padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 14.h),
               child: Row(
                 children: [
+                  SizedBox(
+                    width: 50.w,
+                    height: 50.w,
+                    child: ElevatedButton(
+                      key: const ValueKey('contact-attach-button'),
+                      onPressed: _uploadingImage ? null : _pickAndSendImage,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEAF4FF),
+                        foregroundColor: AppTheme.brandBlue,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14.r),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: _uploadingImage
+                          ? SizedBox(
+                              width: 20.w,
+                              height: 20.w,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Icon(Icons.image_outlined, size: 22.sp),
+                    ),
+                  ),
+                  SizedBox(width: 10.w),
                   Expanded(
                     child: TextField(
                       controller: _messageController,
@@ -212,6 +245,58 @@ class _ContactScreenState extends ConsumerState<ContactScreen> {
     }
   }
 
+  Future<void> _pickAndSendImage() async {
+    final XFile? picked;
+    try {
+      picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[ContactScreen] pickImage failed error=$error');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('contact_image_pick_failed'.tr())),
+        );
+      }
+      return;
+    }
+    if (picked == null) {
+      return;
+    }
+
+    setState(() => _uploadingImage = true);
+    try {
+      // Send the typed text along with the image as a caption, then clear it.
+      final caption = _messageController.text.trim();
+      await ref
+          .read(contactThreadProvider.notifier)
+          .sendImage(File(picked.path), caption: caption);
+      _messageController.clear();
+    } on ContactSendException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[ContactScreen] send image failed error=$error');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('contact_image_upload_failed'.tr())),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingImage = false);
+      }
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) {
@@ -260,7 +345,9 @@ class _ChatBubble extends StatelessWidget {
               ),
             ],
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
+              padding: message.hasImage && message.text.isEmpty
+                  ? EdgeInsets.all(6.w)
+                  : EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
               decoration: BoxDecoration(
                 color: isAgent ? const Color(0xFFEAF4FF) : AppTheme.brandBlue,
                 borderRadius: BorderRadius.only(
@@ -270,17 +357,197 @@ class _ChatBubble extends StatelessWidget {
                   bottomRight: isAgent ? radius : Radius.circular(4.r),
                 ),
               ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (message.hasImage)
+                    _ChatImage(
+                      imageUrl: AppEnv.resolveMediaUrl(message.imageUrl!),
+                    ),
+                  if (message.hasImage && message.text.isNotEmpty)
+                    SizedBox(height: 8.h),
+                  if (message.text.isNotEmpty)
+                    Text(
+                      message.text,
+                      style: TextStyle(
+                        color: isAgent ? const Color(0xFF2E58B5) : Colors.white,
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.only(
+                top: 4.h,
+                left: isAgent ? 6.w : 0,
+                right: isAgent ? 0 : 6.w,
+              ),
               child: Text(
-                message.text,
+                _formatMessageTime(message.createdAt),
                 style: TextStyle(
-                  color: isAgent ? const Color(0xFF2E58B5) : Colors.white,
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF9AA7B8),
+                  fontSize: 11.sp,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Formats the message time in the device's local zone as `HH:mm`, prefixing
+  /// the date (`dd/MM`) when the message is not from today.
+  static String _formatMessageTime(DateTime createdAt) {
+    final local = createdAt.toLocal();
+    final now = DateTime.now();
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    final time = '$hh:$mm';
+
+    final isToday =
+        local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day;
+    if (isToday) {
+      return time;
+    }
+    final dd = local.day.toString().padLeft(2, '0');
+    final mo = local.month.toString().padLeft(2, '0');
+    return '$dd/$mo $time';
+  }
+}
+
+class _ChatImage extends StatelessWidget {
+  const _ChatImage({required this.imageUrl});
+
+  final String imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      // Tap opens a full-screen, pinch-to-zoom preview.
+      onTap: () => _openPreview(context),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12.r),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 240.w, maxHeight: 280.h),
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.cover,
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) {
+                return child;
+              }
+              return SizedBox(
+                width: 200.w,
+                height: 150.h,
+                child: const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: 200.w,
+                height: 120.h,
+                color: const Color(0xFFDCE6F2),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: const Color(0xFF8A99AD),
+                  size: 28.sp,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openPreview(BuildContext context) {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.black87,
+        barrierDismissible: true,
+        pageBuilder: (_, _, _) => _ImagePreview(imageUrl: imageUrl),
+        transitionsBuilder: (_, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    );
+  }
+}
+
+/// Full-screen image preview with pinch-to-zoom and a close button.
+class _ImagePreview extends StatelessWidget {
+  const _ImagePreview({required this.imageUrl});
+
+  final String imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          // Tap on the dark backdrop closes the preview.
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).maybePop(),
+            ),
+          ),
+          Positioned.fill(
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 5,
+              child: Center(
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) {
+                      return child;
+                    }
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.broken_image_outlined,
+                    color: Colors.white70,
+                    size: 48.sp,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: EdgeInsets.all(8.w),
+                child: Material(
+                  color: Colors.black38,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    key: const ValueKey('chat-image-preview-close'),
+                    tooltip: 'common_close'.tr(),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

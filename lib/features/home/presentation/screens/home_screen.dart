@@ -59,6 +59,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           SizedBox(height: 14.h),
           parcelsAsync.when(
+            // Show the spinner while refetching (e.g. after a branch switch)
+            // instead of holding the previous branch's parcels on screen.
+            skipLoadingOnRefresh: false,
             data: (apiParcels) {
               final parcels = apiParcels
                   .map(_ParcelItem.fromApi)

@@ -48,7 +48,7 @@ class OrderHistoryScreen extends ConsumerWidget {
                 padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
                 itemCount: orders.length,
                 separatorBuilder: (context, index) => SizedBox(height: 12.h),
-                itemBuilder: (context, index) => _OrderCard(
+                itemBuilder: (context, index) => OrderHistoryCard(
                   key: ValueKey('order-history-item-${orders[index].id}'),
                   order: orders[index],
                 ),
@@ -81,8 +81,10 @@ class OrderHistoryScreen extends ConsumerWidget {
   }
 }
 
-class _OrderCard extends StatelessWidget {
-  const _OrderCard({super.key, required this.order});
+/// A single order row, reused by the order-history screen and the inline
+/// order-history view on the profile/status section.
+class OrderHistoryCard extends StatelessWidget {
+  const OrderHistoryCard({super.key, required this.order});
 
   final OrderSummary order;
 

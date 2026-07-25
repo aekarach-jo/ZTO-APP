@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../config/app_env.dart';
 import 'interceptors/auth_interceptor.dart';
 import 'models/auth_tokens.dart';
+import 'storage/branch_code_storage.dart';
 import 'storage/token_storage.dart';
 
 class ApiClient {
@@ -14,6 +15,7 @@ class ApiClient {
   static ApiClient create({
     required TokenStorage tokenStorage,
     required RefreshTokenHandler onRefreshToken,
+    BranchCodeStore? branchCodeStore,
     VoidCallback? onRefreshFailed,
   }) {
     final dio = Dio(
@@ -29,6 +31,7 @@ class ApiClient {
       AuthInterceptor(
         dio: dio,
         tokenStorage: tokenStorage,
+        branchCodeStore: branchCodeStore,
         onRefreshToken: onRefreshToken,
         onRefreshFailed: onRefreshFailed,
       ),

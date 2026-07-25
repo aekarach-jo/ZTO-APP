@@ -8,14 +8,18 @@ import 'package:go_router/go_router.dart';
 
 import '../../../auth/application/auth_provider.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
+import '../../../../core/network/network_providers.dart';
 import '../../../branch/data/branch_repository.dart';
 import '../../../contact/data/contact_repository.dart';
 import '../../../contact/presentation/screens/contact_screen.dart';
 import '../../application/main_layout_navigation_provider.dart';
+import '../../../home/data/home_parcel_repository.dart';
 import '../../../home/presentation/screens/home_screen.dart';
 import '../../../notifications/data/notification_repository.dart';
+import '../../../parcel_status/data/parcel_status_repository.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
+import '../../../send/data/send_repository.dart';
 import '../../../send/presentation/screens/send_screen.dart';
 import '../../../staff/presentation/screens/staff_receive_screen.dart';
 import '../../../staff/presentation/screens/staff_scan_pay_screen.dart';
@@ -443,6 +447,7 @@ class _BranchMenuItem extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final branches = ref.watch(branchesProvider).valueOrNull ?? const <Branch>[];
     final currentId = ref.watch(currentBranchIdProvider).valueOrNull;
+    final selectedCode = ref.watch(selectedBranchCodeProvider).valueOrNull;
 
     if (branches.isEmpty) {
       return Padding(
@@ -465,7 +470,12 @@ class _BranchMenuItem extends ConsumerWidget {
           Expanded(
             child: _BranchChip(
               branch: branches[i],
-              selected: branches[i].id == currentId,
+              // Prefer the locally selected code so the toggle reflects the
+              // switch instantly; fall back to the server's branch id before
+              // any manual selection has been made.
+              selected: (selectedCode != null && selectedCode.isNotEmpty)
+                  ? branches[i].code == selectedCode
+                  : branches[i].id == currentId,
               onTap: () => _selectBranch(context, branches[i]),
             ),
           ),
@@ -478,19 +488,39 @@ class _BranchMenuItem extends ConsumerWidget {
     // Capture the app-level container before the menu (and this widget) closes.
     final container = ProviderScope.containerOf(context);
     Navigator.of(context).pop();
-    unawaited(_applySelection(container, branch.id));
+    unawaited(_applySelection(container, branch));
   }
 
   Future<void> _applySelection(
     ProviderContainer container,
-    String branchId,
+    Branch branch,
   ) async {
-    try {
-      await container.read(branchRepositoryProvider).selectBranch(branchId);
-    } finally {
-      container.invalidate(currentBranchIdProvider);
-      container.invalidate(contactThreadProvider);
+    // Point every subsequent request at the chosen branch FIRST. The
+    // `x-branch-code` header is what NestJS routes on, so once it is set the
+    // PATCH below and all data refetches hit the correct backend.
+    if (branch.code.isNotEmpty) {
+      await container.read(branchCodeStoreProvider).save(branch.code);
+      container.invalidate(selectedBranchCodeProvider);
     }
+
+    // Best-effort: keep the server-side user record in sync too. Routing no
+    // longer depends on this succeeding, so a failure here must not block the
+    // refetch — the header alone already selects the branch.
+    try {
+      await container.read(branchRepositoryProvider).selectBranch(branch.id);
+    } catch (_) {
+      // BranchRepository already logged the real cause (status/body).
+    }
+
+    // Parcels/orders are a different set per branch, so drop every
+    // branch-scoped cache and refetch for the newly selected branch instead of
+    // showing the previous branch's data.
+    container.invalidate(currentBranchIdProvider);
+    container.invalidate(contactThreadProvider);
+    container.invalidate(homeParcelsProvider);
+    container.invalidate(parcelStatusProvider);
+    container.invalidate(notificationsProvider);
+    container.invalidate(sendParcelsProvider);
   }
 }
 

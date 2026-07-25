@@ -30,6 +30,8 @@
 	<string>Allow camera access to scan parcel QR codes.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Allow photo access to scan QR codes from images.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Allow saving the payment QR code image to your photos.</string>
 	<key>GMSApiKey</key>
 	<string>AIzaSyC6PcW7EYTMMTYwGRU_xNOnxHht8mZc9hA</string>
 	<key>UIApplicationSceneManifest</key>

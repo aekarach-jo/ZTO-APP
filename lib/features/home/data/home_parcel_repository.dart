@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/parcel_response_parser.dart';
@@ -152,8 +153,21 @@ class HomeParcelRepository {
   final Dio _dio;
 
   Future<List<HomeParcel>> fetchMyParcels() async {
-    final response = await _dio.get<dynamic>('/parcels');
-    final list = _extractList(response.data);
+    late final dynamic responseData;
+    try {
+      final response = await _dio.get<dynamic>('/parcels');
+      responseData = response.data;
+    } on DioException catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[HomeParcelRepository] GET /parcels failed: '
+          'status=${error.response?.statusCode} type=${error.type} '
+          'message=${error.message} body=${error.response?.data}',
+        );
+      }
+      rethrow;
+    }
+    final list = _extractList(responseData);
     return list
         .map((item) {
           if (item is HomeParcel) {

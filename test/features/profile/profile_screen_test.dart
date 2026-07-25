@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zto_app/features/orders/data/order_repository.dart';
 import 'package:zto_app/features/parcel_status/data/parcel_status_repository.dart';
+import 'package:zto_app/features/profile/data/profile_repository.dart';
 import 'package:zto_app/features/profile/presentation/screens/profile_screen.dart';
 
 import '../../test_helpers/mock_asset_loader.dart';
@@ -28,6 +30,26 @@ Widget _buildTestApp(Widget child) {
               localizationsDelegates: context.localizationDelegates,
               home: ProviderScope(
                 overrides: [
+                  userProfileProvider.overrideWith((ref) async {
+                    return const UserProfile(
+                      id: 'u1',
+                      displayName: 'Somchai Rakdee',
+                      email: 'somchai@email.com',
+                      phone: '02000000',
+                      profileImage: '',
+                    );
+                  }),
+                  ordersProvider.overrideWith((ref) async {
+                    return const [
+                      OrderSummary(
+                        id: 'o1',
+                        type: 'pickup',
+                        paymentStatus: OrderPaymentState.paid,
+                        amount: 10000,
+                        recipientName: 'rolan',
+                      ),
+                    ];
+                  }),
                   parcelStatusProvider.overrideWith((ref) async {
                     return const ParcelStatusPage(
                       counts: ParcelStatusCounts(
@@ -83,30 +105,25 @@ void main() {
     expect(find.text('At home'), findsNothing);
     expect(find.text('Sony WH-1000XM5 Headphones'), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('profile-save-button')),
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('profile-save-button')), findsOneWidget);
+    // The "current receiver location" card was removed from the profile page.
+    expect(find.byKey(const ValueKey('profile-save-button')), findsNothing);
   });
 
-  testWidgets('save button shows feedback snackbar', (tester) async {
+  testWidgets('shows order history inline when tapping the 4th card', (
+    tester,
+  ) async {
     await tester.pumpWidget(_buildTestApp(const ProfileScreen()));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('profile-save-button')),
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
+    // Parcel content is shown first; orders are not.
+    expect(find.byKey(const ValueKey('profile-order-item-o1')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('profile-summary-orders')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('profile-save-button')));
-    await tester.pump();
-
-    expect(find.text('Profile location saved'), findsOneWidget);
+    // The order row is now rendered inline (no navigation).
+    expect(find.byKey(const ValueKey('profile-order-item-o1')), findsOneWidget);
+    expect(find.text('Sony WH-1000XM5 Headphones'), findsNothing);
   });
 
   testWidgets('switches shared status content when tapping summary cards', (

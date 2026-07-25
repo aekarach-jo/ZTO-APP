@@ -6,6 +6,7 @@ import 'api_client.dart';
 import '../config/app_env.dart';
 import 'interceptors/auth_interceptor.dart';
 import 'models/auth_tokens.dart';
+import 'storage/branch_code_storage.dart';
 import 'storage/current_user_storage.dart';
 import 'storage/token_storage.dart';
 
@@ -21,6 +22,17 @@ final tokenStorageProvider = Provider<TokenStorage>((ref) {
 final currentUserStorageProvider = Provider<CurrentUserStorage>((ref) {
   final storage = ref.watch(secureStorageProvider);
   return SecureCurrentUserStorage(storage);
+});
+
+final branchCodeStoreProvider = Provider<BranchCodeStore>((ref) {
+  final storage = ref.watch(secureStorageProvider);
+  return SecureBranchCodeStore(storage);
+});
+
+/// The branch code (`KD` / `CLS`) currently attached to every request. Drives
+/// the branch toggle highlight and refreshes when the user switches branch.
+final selectedBranchCodeProvider = FutureProvider<String?>((ref) {
+  return ref.watch(branchCodeStoreProvider).read();
 });
 
 final currentUserPhoneProvider = FutureProvider<String?>((ref) {
@@ -100,14 +112,17 @@ DateTime? _parseExpiresAt(dynamic value) {
 final apiClientProvider = Provider<ApiClient>((ref) {
   final tokenStorage = ref.watch(tokenStorageProvider);
   final currentUserStorage = ref.watch(currentUserStorageProvider);
+  final branchCodeStore = ref.watch(branchCodeStoreProvider);
   final refreshHandler = ref.watch(refreshTokenHandlerProvider);
 
   return ApiClient.create(
     tokenStorage: tokenStorage,
     onRefreshToken: refreshHandler,
+    branchCodeStore: branchCodeStore,
     onRefreshFailed: () async {
       await tokenStorage.clear();
       await currentUserStorage.clear();
+      await branchCodeStore.clear();
       ref.invalidate(currentUserPhoneProvider);
       ref.invalidate(authTokensProvider);
     },

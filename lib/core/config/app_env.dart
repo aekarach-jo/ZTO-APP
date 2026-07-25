@@ -24,6 +24,22 @@ class AppEnv {
     return _deriveSocketBaseUrl(apiBaseUrl);
   }
 
+  /// Resolves a media path returned by the API (e.g. `/uploads/chat/x.jpg`)
+  /// to an absolute URL against the API origin. Absolute URLs pass through
+  /// unchanged. Used to render chat/profile images.
+  static String resolveMediaUrl(String pathOrUrl) {
+    final trimmed = pathOrUrl.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null && uri.hasScheme) {
+      return trimmed;
+    }
+    final origin = _deriveSocketBaseUrl(apiBaseUrl);
+    return trimmed.startsWith('/') ? '$origin$trimmed' : '$origin/$trimmed';
+  }
+
   static String _deriveSocketBaseUrl(String apiBaseUrl) {
     final uri = Uri.tryParse(apiBaseUrl);
     if (uri == null || !uri.hasAuthority) {

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/network_providers.dart';
@@ -77,7 +78,11 @@ class ParcelStatusOrder {
     return ParcelStatusOrder(
       nestOrderId: (json['nest_order_id'] ?? '').toString(),
       type: (json['type'] ?? '').toString(),
-      amountLak: _readDouble(json['amount_lak']),
+      // The total actually charged (`price_lak`); older/other shapes may send
+      // `amount_lak` or only `item_total_lak`, so fall back through them.
+      amountLak: _readDouble(
+        json['price_lak'] ?? json['amount_lak'] ?? json['item_total_lak'],
+      ),
       method: json['method']?.toString(),
       paymentRef: json['payment_ref']?.toString(),
       paidAt: json['paid_at'] is String
@@ -154,10 +159,7 @@ class ParcelStatusPage {
   }
 
   factory ParcelStatusPage.fromResponse(dynamic data) {
-    final root = data is Map<String, dynamic> ? data : const <String, dynamic>{};
-    final payload = root['data'] is Map<String, dynamic>
-        ? root['data'] as Map<String, dynamic>
-        : root;
+    final payload = _unwrapToPayload(data);
 
     final rawParcels = payload['parcels'];
     final parcels = rawParcels is List
@@ -176,6 +178,31 @@ class ParcelStatusPage {
       parcels: parcels,
     );
   }
+
+  /// The API wraps the payload in nested `data` envelopes
+  /// (`{ data: { code, status, data: { counts, parcels } } }`). Dig through the
+  /// `data` layers until we reach the object that actually holds
+  /// `counts`/`parcels`, tolerating single- or un-nested shapes too.
+  static Map<String, dynamic> _unwrapToPayload(dynamic data) {
+    dynamic current = data;
+    for (var depth = 0; depth < 5; depth++) {
+      if (current is! Map<String, dynamic>) {
+        break;
+      }
+      if (current.containsKey('parcels') || current.containsKey('counts')) {
+        return current;
+      }
+      final inner = current['data'];
+      if (inner is Map<String, dynamic>) {
+        current = inner;
+      } else {
+        break;
+      }
+    }
+    return current is Map<String, dynamic>
+        ? current
+        : const <String, dynamic>{};
+  }
 }
 
 class ParcelStatusRepository {
@@ -184,8 +211,21 @@ class ParcelStatusRepository {
   final Dio _dio;
 
   Future<ParcelStatusPage> fetchStatus() async {
-    final response = await _dio.get<dynamic>('/parcels/status');
-    return ParcelStatusPage.fromResponse(response.data);
+    try {
+      final response = await _dio.get<dynamic>('/parcels/status');
+      return ParcelStatusPage.fromResponse(response.data);
+    } on DioException catch (error) {
+      // Surface the real cause behind the retry state (status code / body)
+      // instead of silently swallowing it in the UI's error branch.
+      if (kDebugMode) {
+        debugPrint(
+          '[ParcelStatusRepository] GET /parcels/status failed: '
+          'status=${error.response?.statusCode} type=${error.type} '
+          'message=${error.message} body=${error.response?.data}',
+        );
+      }
+      rethrow;
+    }
   }
 }
 

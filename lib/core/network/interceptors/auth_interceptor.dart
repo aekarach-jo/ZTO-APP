@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/auth_tokens.dart';
+import '../storage/branch_code_storage.dart';
 import '../storage/token_storage.dart';
 
 typedef RefreshTokenHandler = Future<AuthTokens?> Function(String refreshToken);
@@ -13,13 +14,16 @@ class AuthInterceptor extends Interceptor {
     required Dio dio,
     required TokenStorage tokenStorage,
     required RefreshTokenHandler onRefreshToken,
+    BranchCodeStore? branchCodeStore,
     this.onRefreshFailed,
   })  : _dio = dio,
         _tokenStorage = tokenStorage,
+        _branchCodeStore = branchCodeStore,
         _onRefreshToken = onRefreshToken;
 
   final Dio _dio;
   final TokenStorage _tokenStorage;
+  final BranchCodeStore? _branchCodeStore;
   final RefreshTokenHandler _onRefreshToken;
   final VoidCallback? onRefreshFailed;
 
@@ -38,6 +42,14 @@ class AuthInterceptor extends Interceptor {
     final tokens = await _tokenStorage.read();
     if (tokens?.accessToken case final accessToken?) {
       options.headers['Authorization'] = 'Bearer $accessToken';
+    }
+
+    // Tell NestJS which branch (KD / CLS) the user is on so it can route to the
+    // matching Laravel backend. Missing/wrong code falls back to the default
+    // branch, so attach it to every call whenever a branch has been selected.
+    final branchCode = await _branchCodeStore?.read();
+    if (branchCode != null && branchCode.isNotEmpty) {
+      options.headers['x-branch-code'] = branchCode;
     }
 
     handler.next(options);

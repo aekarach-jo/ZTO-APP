@@ -80,12 +80,17 @@ class _FakeChatSocket implements ChatSocket {
   void leaveRoom(String roomId) {}
 
   @override
-  void sendMessage({required String roomId, required String content}) {
+  void sendMessage({
+    required String roomId,
+    String content = '',
+    String? imageUrl,
+  }) {
     _messages.add({
       'id': 'user-${_counter++}',
       'senderId': 'user-2',
       'consoleAdminId': null,
       'content': content,
+      'imageUrl': ?imageUrl,
       'createdAt': DateTime.now().toIso8601String(),
     });
     _messages.add({

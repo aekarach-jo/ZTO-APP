@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/parcel_response_parser.dart';
@@ -126,13 +127,28 @@ class SendRepository {
   /// Creates a forward order. The send flow forwards one parcel at a time, but
   /// the endpoint accepts many, so the single parcel is wrapped in an array.
   Future<ParcelOrder> createForwardRequest(CreateForwardRequest request) async {
-    final response = await _dio.post<dynamic>(
-      '/orders/forward',
-      data: <String, dynamic>{
-        'parcels': [request.toJson()],
-      },
-    );
-    return ParcelOrder.fromResponse(response.data);
+    final body = <String, dynamic>{
+      'parcels': [request.toJson()],
+    };
+    try {
+      final response = await _dio.post<dynamic>('/orders/forward', data: body);
+      if (kDebugMode) {
+        debugPrint(
+          '[SendRepository] POST /orders/forward ok: '
+          'status=${response.statusCode} body=${response.data}',
+        );
+      }
+      return ParcelOrder.fromResponse(response.data);
+    } on DioException catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[SendRepository] POST /orders/forward failed: '
+          'status=${error.response?.statusCode} type=${error.type} '
+          'request=$body body=${error.response?.data}',
+        );
+      }
+      rethrow;
+    }
   }
 
   List<dynamic> _extractList(dynamic data) {

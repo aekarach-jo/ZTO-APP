@@ -5,6 +5,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/utils/lak_currency.dart';
+import '../../../orders/data/order_repository.dart';
+import '../../../orders/presentation/screens/order_history_screen.dart';
 import '../../data/parcel_status_repository.dart';
 
 class ParcelStatusScreen extends ConsumerStatefulWidget {
@@ -27,6 +29,9 @@ class _ParcelStatusScreenState extends ConsumerState<ParcelStatusScreen> {
         child: RefreshIndicator(
           onRefresh: () => ref.refresh(parcelStatusProvider.future),
           child: statusAsync.when(
+            // Show the spinner while refetching (e.g. after a branch switch)
+            // instead of holding the previous branch's data on screen.
+            skipLoadingOnRefresh: false,
             data: (page) => ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
@@ -62,7 +67,7 @@ class _ParcelStatusScreenState extends ConsumerState<ParcelStatusScreen> {
 /// Shared status summary and parcel cards used by both the status route and
 /// the profile tab. Keeping this in one widget ensures both surfaces render
 /// the same API model and parcel name.
-class ParcelStatusSection extends StatefulWidget {
+class ParcelStatusSection extends ConsumerStatefulWidget {
   const ParcelStatusSection({
     super.key,
     required this.page,
@@ -73,11 +78,16 @@ class ParcelStatusSection extends StatefulWidget {
   final String summaryKeyPrefix;
 
   @override
-  State<ParcelStatusSection> createState() => _ParcelStatusSectionState();
+  ConsumerState<ParcelStatusSection> createState() =>
+      _ParcelStatusSectionState();
 }
 
-class _ParcelStatusSectionState extends State<ParcelStatusSection> {
+class _ParcelStatusSectionState extends ConsumerState<ParcelStatusSection> {
   ParcelStatusCategory _selectedCategory = ParcelStatusCategory.inProgress;
+
+  /// When true, the "Order history" card is selected and the section shows the
+  /// user's orders inline instead of the parcel-status cards.
+  bool _showOrders = false;
 
   static const List<ParcelStatusCategory> _categories = [
     ParcelStatusCategory.inProgress,
@@ -87,8 +97,6 @@ class _ParcelStatusSectionState extends State<ParcelStatusSection> {
 
   @override
   Widget build(BuildContext context) {
-    final items = widget.page.forCategory(_selectedCategory);
-
     return Column(
       children: [
         Row(
@@ -101,29 +109,87 @@ class _ParcelStatusSectionState extends State<ParcelStatusSection> {
                   ),
                   category: _categories[i],
                   count: widget.page.counts.forCategory(_categories[i]),
-                  selected: _selectedCategory == _categories[i],
+                  selected: !_showOrders && _selectedCategory == _categories[i],
                   onTap: () {
                     setState(() {
+                      _showOrders = false;
                       _selectedCategory = _categories[i];
                     });
                   },
                 ),
               ),
-              if (i != _categories.length - 1) SizedBox(width: 8.w),
+              SizedBox(width: 8.w),
             ],
+            // 4th card: opens the order history inline (no separate page).
+            Expanded(
+              child: _OrderHistoryCard(
+                cardKey: ValueKey('${widget.summaryKeyPrefix}-orders'),
+                selected: _showOrders,
+                onTap: () {
+                  setState(() {
+                    _showOrders = true;
+                  });
+                },
+              ),
+            ),
           ],
         ),
         SizedBox(height: 16.h),
-        if (items.isEmpty)
-          _EmptyState(message: 'status_empty'.tr())
+        if (_showOrders)
+          ..._buildOrdersContent()
         else
-          for (var i = 0; i < items.length; i++) ...[
-            _StatusParcelCard(
-              key: ValueKey('parcel-status-item-${items[i].id}'),
-              item: items[i],
+          ..._buildParcelContent(),
+      ],
+    );
+  }
+
+  List<Widget> _buildParcelContent() {
+    final items = widget.page.forCategory(_selectedCategory);
+    if (items.isEmpty) {
+      return [_EmptyState(message: 'status_empty'.tr())];
+    }
+    return [
+      for (var i = 0; i < items.length; i++) ...[
+        _StatusParcelCard(
+          key: ValueKey('parcel-status-item-${items[i].id}'),
+          item: items[i],
+        ),
+        if (i != items.length - 1) SizedBox(height: 12.h),
+      ],
+    ];
+  }
+
+  List<Widget> _buildOrdersContent() {
+    final ordersAsync = ref.watch(ordersProvider);
+    return ordersAsync.when(
+      data: (orders) {
+        if (orders.isEmpty) {
+          return [_EmptyState(message: 'order_history_empty'.tr())];
+        }
+        return [
+          for (var i = 0; i < orders.length; i++) ...[
+            OrderHistoryCard(
+              key: ValueKey('profile-order-item-${orders[i].id}'),
+              order: orders[i],
             ),
-            if (i != items.length - 1) SizedBox(height: 12.h),
+            if (i != orders.length - 1) SizedBox(height: 12.h),
           ],
+        ];
+      },
+      loading: () => [
+        Padding(
+          padding: EdgeInsets.only(top: 18.h),
+          child: const Center(child: CircularProgressIndicator()),
+        ),
+      ],
+      error: (error, stackTrace) => [
+        Center(
+          child: TextButton(
+            key: const ValueKey('profile-orders-retry'),
+            onPressed: () => ref.invalidate(ordersProvider),
+            child: Text('common_retry'.tr()),
+          ),
+        ),
       ],
     );
   }
@@ -180,6 +246,66 @@ class _CountCard extends StatelessWidget {
                 child: Center(
                   child: Text(
                     _categoryLabelKey(category).tr(),
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: const Color(0xFF49576A),
+                      fontSize: 11.sp,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The 4th summary card. Styled like [_CountCard] but shows an icon + label
+/// and, when tapped, reveals the order history inline.
+class _OrderHistoryCard extends StatelessWidget {
+  const _OrderHistoryCard({
+    required this.cardKey,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Key cardKey;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = AppTheme.brandBlueDark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: cardKey,
+        borderRadius: BorderRadius.circular(16.r),
+        onTap: onTap,
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 12.h),
+          decoration: BoxDecoration(
+            color: selected ? accent.withValues(alpha: 0.10) : Colors.white,
+            borderRadius: BorderRadius.circular(16.r),
+            border: Border.all(
+              color: selected ? accent : const Color(0xFFE4EAF3),
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(Icons.receipt_long_outlined, color: accent, size: 22.sp),
+              SizedBox(height: 4.h),
+              SizedBox(
+                height: 30.h,
+                child: Center(
+                  child: Text(
+                    'order_history_title'.tr(),
                     maxLines: 2,
                     textAlign: TextAlign.center,
                     style: TextStyle(

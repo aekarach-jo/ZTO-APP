@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/media_upload_repository.dart';
 import '../../../core/network/network_providers.dart';
 import 'chat_socket_service.dart';
 
@@ -25,6 +27,7 @@ class ContactMessage {
     required this.text,
     required this.createdAt,
     this.senderName,
+    this.imageUrl,
   });
 
   final String id;
@@ -36,6 +39,12 @@ class ContactMessage {
   /// Null for customer messages.
   final String? senderName;
 
+  /// Attached image path (e.g. `/uploads/chat/x.jpg`), when the message
+  /// carries a photo. Resolve to an absolute URL before rendering.
+  final String? imageUrl;
+
+  bool get hasImage => imageUrl != null && imageUrl!.isNotEmpty;
+
   /// Parses both the REST history payload and the `new-message` socket event.
   /// A message counts as an admin (agent) reply when it carries a
   /// `consoleAdminId`; otherwise it is treated as the customer's own message.
@@ -46,7 +55,12 @@ class ContactMessage {
         ? ContactMessageRole.agent
         : ContactMessageRole.user;
 
-    final text = _readString(json, const ['content', 'message', 'text', 'body']) ?? '-';
+    final imageUrl =
+        _readString(json, const ['imageUrl', 'image_url', 'image']);
+    // Image-only messages carry no text; keep the bubble empty rather than
+    // showing a placeholder dash next to the photo.
+    final rawText = _readString(json, const ['content', 'message', 'text', 'body']);
+    final text = rawText ?? (imageUrl != null ? '' : '-');
     final id = _readString(json, const ['id', '_id', 'messageId']) ??
         '${role.name}-${DateTime.now().microsecondsSinceEpoch}';
     final createdAt = _parseDate(json['createdAt'] ?? json['created_at'] ?? json['sentAt']) ??
@@ -60,6 +74,7 @@ class ContactMessage {
       text: text,
       createdAt: createdAt,
       senderName: senderName,
+      imageUrl: imageUrl,
     );
   }
 
@@ -324,10 +339,11 @@ class ContactThreadController extends AsyncNotifier<List<ContactMessage>> {
   }
 
   /// Sends a message over the socket. The server echoes it back via
-  /// `new-message`, which appends it to the thread.
-  void sendMessage(String text) {
+  /// `new-message`, which appends it to the thread. Requires text, an
+  /// [imageUrl], or both.
+  void sendMessage(String text, {String? imageUrl}) {
     final trimmed = text.trim();
-    if (trimmed.isEmpty) {
+    if (trimmed.isEmpty && (imageUrl == null || imageUrl.isEmpty)) {
       return;
     }
     final roomId = _roomId;
@@ -338,7 +354,19 @@ class ContactThreadController extends AsyncNotifier<List<ContactMessage>> {
     if (!socket.isConnected) {
       throw const ContactSendException('Chat is offline. Please try again.');
     }
-    socket.sendMessage(roomId: roomId, content: trimmed);
+    socket.sendMessage(roomId: roomId, content: trimmed, imageUrl: imageUrl);
+  }
+
+  /// Uploads [file] to `POST /chat/upload`, then sends it as an image message
+  /// (optionally with a text [caption]).
+  Future<void> sendImage(File file, {String caption = ''}) async {
+    final roomId = _roomId;
+    final socket = _socket;
+    if (roomId == null || socket == null || !socket.isConnected) {
+      throw const ContactSendException('Chat is offline. Please try again.');
+    }
+    final imageUrl = await ref.read(mediaUploadRepositoryProvider).uploadImage(file);
+    socket.sendMessage(roomId: roomId, content: caption.trim(), imageUrl: imageUrl);
   }
 }
 

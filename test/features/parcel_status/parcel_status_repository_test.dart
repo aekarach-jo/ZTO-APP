@@ -85,6 +85,74 @@ void main() {
     expect(selfPickup.first.order!.paymentRef, 'FCCREF123');
   });
 
+  test('fetchStatus parses the double-nested data.data envelope', () async {
+    final dio = Dio(BaseOptions(baseUrl: 'http://example.com'));
+
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          handler.resolve(
+            Response<dynamic>(
+              requestOptions: options,
+              statusCode: 200,
+              // Shape returned by the live API: { data: { code, status,
+              // data: { counts, parcels } } }.
+              data: const <String, dynamic>{
+                'success': true,
+                'data': {
+                  'code': 200,
+                  'status': 'OK',
+                  'data': {
+                    'counts': {
+                      'in_progress': 39,
+                      'self_pickup': 1,
+                      'forwarded': 0,
+                    },
+                    'parcels': [
+                      {
+                        'id': 7338,
+                        'track_no': '7774084729320004',
+                        'name': 'rolan',
+                        'weight': 0.3,
+                        'price': 9000,
+                        'status': 'success',
+                        'step': 4,
+                        'step_label': 'สำเร็จ',
+                        'category': 'self_pickup',
+                        'is_forward': false,
+                        'order': {
+                          'nest_order_id': 'b503979d',
+                          'type': 'pickup',
+                          'item_total_lak': '10000.00',
+                          'price_lak': '10000.00',
+                          'shipping_fee_lak': '0.00',
+                          'method': 'onepay',
+                          'payment_ref': '202607234046367',
+                          'paid_at': '2026-07-22T22:39:07.000000Z',
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ),
+          );
+        },
+      ),
+    );
+
+    final page = await ParcelStatusRepository(dio: dio).fetchStatus();
+
+    expect(page.counts.inProgress, 39);
+    expect(page.counts.selfPickup, 1);
+
+    final selfPickup = page.forCategory(ParcelStatusCategory.selfPickup);
+    expect(selfPickup, hasLength(1));
+    expect(selfPickup.first.id, '7338');
+    expect(selfPickup.first.order, isNotNull);
+    expect(selfPickup.first.order!.amountLak, 10000.0);
+  });
+
   test('fetchStatus tolerates missing counts and parcels', () async {
     final dio = Dio(BaseOptions(baseUrl: 'http://example.com'));
 

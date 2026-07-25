@@ -73,12 +73,30 @@ class BranchRepository {
   }
 
   Future<void> selectBranch(String branchId) async {
-    await _dio.patch<dynamic>(
-      '/users/me/branch',
-      data: {'branchId': branchId},
-    );
-    if (kDebugMode) {
-      debugPrint('[BranchRepository] selected branchId=$branchId');
+    try {
+      final response = await _dio.patch<dynamic>(
+        '/users/me/branch',
+        data: {'branchId': branchId},
+      );
+      if (kDebugMode) {
+        debugPrint(
+          '[BranchRepository] PATCH /users/me/branch ok: '
+          'branchId=$branchId status=${response.statusCode} '
+          'body=${response.data}',
+        );
+      }
+    } on DioException catch (error) {
+      // The branch switch failing silently is what makes the parcel list look
+      // "stuck" on the previous branch, so surface the real status/body here.
+      if (kDebugMode) {
+        debugPrint(
+          '[BranchRepository] PATCH /users/me/branch failed: '
+          'branchId=$branchId status=${error.response?.statusCode} '
+          'type=${error.type} message=${error.message} '
+          'body=${error.response?.data}',
+        );
+      }
+      rethrow;
     }
   }
 

@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:gal/gal.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -36,15 +40,24 @@ class PickupPaymentParcel {
 class ParcelPaymentArgs {
   const ParcelPaymentArgs.pickup({required this.parcels})
     : existingOrder = null,
-      itemName = null;
+      itemName = null,
+      amountOverride = null;
 
-  const ParcelPaymentArgs.forOrder({required ParcelOrder order, this.itemName})
-    : existingOrder = order,
-      parcels = const [];
+  const ParcelPaymentArgs.forOrder({
+    required ParcelOrder order,
+    this.itemName,
+    this.amountOverride,
+  })  : existingOrder = order,
+        parcels = const [];
 
   final List<PickupPaymentParcel> parcels;
   final ParcelOrder? existingOrder;
   final String? itemName;
+
+  /// Amount to display/charge instead of `existingOrder.amount`. Used by the
+  /// forward flow, where the customer pays only the shipping fee (computed
+  /// client-side), not the parcel's own price.
+  final int? amountOverride;
 }
 
 class ParcelPaymentScreen extends ConsumerStatefulWidget {
@@ -99,20 +112,27 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
   Timer? _pollTimer;
   DateTime? _pollStartedAt;
 
+  /// Captures the rendered QR card so it can be saved to the gallery.
+  final GlobalKey _qrBoundaryKey = GlobalKey();
+  bool _savingQr = false;
+
   @override
   void initState() {
     super.initState();
     final existingOrder = widget.args.existingOrder;
     if (existingOrder != null) {
       _orderId = existingOrder.id;
-      _totalAmount = existingOrder.amount;
+      // Forward charges only the shipping fee (amountOverride); fall back to the
+      // order's own amount for other existing-order flows.
+      final amount = widget.args.amountOverride ?? existingOrder.amount;
+      _totalAmount = amount;
       _pickupParcelIds = const [];
       _lines = [
         _PaymentLine(
           title: widget.args.itemName ??
               existingOrder.recipientName ??
               existingOrder.id,
-          amount: existingOrder.amount,
+          amount: amount,
         ),
       ];
     } else {
@@ -233,29 +253,59 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
           ),
           child: Column(
             children: [
-              Container(
-                padding: EdgeInsets.all(12.w),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14.r),
-                  border: Border.all(
-                    color: const Color(0xFFE71F30),
-                    width: 1.4,
+              RepaintBoundary(
+                key: _qrBoundaryKey,
+                child: Container(
+                  padding: EdgeInsets.all(12.w),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14.r),
+                    border: Border.all(
+                      color: const Color(0xFFE71F30),
+                      width: 1.4,
+                    ),
+                  ),
+                  child: qrString == null
+                      ? SizedBox(
+                          width: 220.w,
+                          height: 220.w,
+                          child:
+                              const Center(child: CircularProgressIndicator()),
+                        )
+                      : QrImageView(
+                          key: const ValueKey('pickup-payment-qr-image'),
+                          data: qrString,
+                          version: QrVersions.auto,
+                          size: 220.w,
+                        ),
+                ),
+              ),
+              SizedBox(height: 14.h),
+              if (qrString != null)
+                OutlinedButton.icon(
+                  key: const ValueKey('pickup-payment-save-qr-button'),
+                  onPressed: _savingQr ? null : _saveQrImage,
+                  icon: _savingQr
+                      ? SizedBox(
+                          width: 16.w,
+                          height: 16.w,
+                          child:
+                              const CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(Icons.download_rounded, size: 18.sp),
+                  label: Text('pickup_payment_save_qr'.tr()),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.brandBlueDark,
+                    side: const BorderSide(color: Color(0xFFCBD6E4)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 18.w,
+                      vertical: 10.h,
+                    ),
                   ),
                 ),
-                child: qrString == null
-                    ? SizedBox(
-                        width: 220.w,
-                        height: 220.w,
-                        child: const Center(child: CircularProgressIndicator()),
-                      )
-                    : QrImageView(
-                        key: const ValueKey('pickup-payment-qr-image'),
-                        data: qrString,
-                        version: QrVersions.auto,
-                        size: 220.w,
-                      ),
-              ),
               SizedBox(height: 14.h),
               Text(
                 'pickup_payment_bcel_qr_caption'.tr(),
@@ -533,6 +583,50 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('pickup_payment_error'.tr())));
+  }
+
+  /// Captures the rendered QR card and saves it to the device gallery.
+  Future<void> _saveQrImage() async {
+    setState(() => _savingQr = true);
+    try {
+      final boundary = _qrBoundaryKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) {
+        throw StateError('QR is not ready to capture yet.');
+      }
+
+      final image = await boundary.toImage(pixelRatio: 3);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        throw StateError('Failed to encode the QR image.');
+      }
+
+      await Gal.putImageBytes(
+        byteData.buffer.asUint8List(),
+        name: 'zto-qr-${_orderId ?? DateTime.now().millisecondsSinceEpoch}',
+      );
+
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('pickup_payment_qr_saved'.tr())),
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[ParcelPayment] save QR failed: $error');
+      }
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('pickup_payment_qr_save_failed'.tr())),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _savingQr = false);
+      }
+    }
   }
 }
 
