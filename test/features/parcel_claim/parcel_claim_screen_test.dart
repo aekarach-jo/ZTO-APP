@@ -125,7 +125,7 @@ Widget _buildTestApp(_FakeParcelClaimRepository repository) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('scrolling near the end loads the next unowned parcel page', (
+  testWidgets('parcels stay hidden until the full tracking number is typed', (
     tester,
   ) async {
     final repository = _FakeParcelClaimRepository();
@@ -133,21 +133,35 @@ void main() {
     await tester.pumpWidget(_buildTestApp(repository));
     await tester.pumpAndSettle();
 
-    expect(find.text('#xxxxx01'), findsOneWidget);
-    expect(find.text('#xxxxx21'), findsNothing);
-
-    await tester.scrollUntilVisible(
-      find.text('#xxxxx21'),
-      600,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('#xxxxx21'), findsOneWidget);
+    // ดึงข้อมูลมาครบทุกหน้าตั้งแต่เข้าหน้าจอ แต่ยังไม่แสดงรายการ
     expect(
       repository.receivedQueries,
       contains(const UnownedParcelsQuery(page: 2, perPage: 20)),
     );
+    expect(find.byType(Checkbox), findsNothing);
+    expect(
+      find.text('Enter the full tracking number to find your parcel'),
+      findsOneWidget,
+    );
+
+    // กรอกยังไม่ครบเลข — ยังไม่แสดงรายการ
+    await tester.enterText(find.byType(TextField), 'xxxxx');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Checkbox), findsNothing);
+    expect(
+      find.text('Enter the full tracking number to find your parcel'),
+      findsOneWidget,
+    );
+
+    // #xxxxx21 อยู่หน้าที่ 2 — กรอกเลขครบแล้วเจอ เพราะโหลดมาครบทุกหน้า
+    await tester.enterText(find.byType(TextField), 'xxxxx21');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 parcels found'), findsOneWidget);
+    expect(find.byType(Checkbox), findsOneWidget);
   });
 
   testWidgets('search filters unowned parcels and submit sends selected ids', (
@@ -159,24 +173,30 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Claim Parcel Ownership'), findsOneWidget);
-    expect(find.text('#xxxxx01'), findsOneWidget);
+    expect(find.byType(Checkbox), findsNothing);
 
-    await tester.enterText(find.byType(TextField), 'sony');
+    await tester.enterText(find.byType(TextField), 'xxxxx01');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
-    expect(find.text('#xxxxx01'), findsOneWidget);
-    expect(find.text('#xxxxx21'), findsNothing);
+    expect(find.text('1 parcels found'), findsOneWidget);
 
-    await tester.drag(find.byType(ListView).first, const Offset(0, -250));
+    await tester.ensureVisible(find.byType(Checkbox));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('#xxxxx01').first);
+    await tester.tap(find.byType(Checkbox));
     await tester.pumpAndSettle();
 
     expect(find.text('1 selected'), findsOneWidget);
     expect(find.widgetWithText(InputChip, '#xxxxx01'), findsOneWidget);
 
     await tester.tap(find.text('Confirm these parcels are mine'));
+    await tester.pumpAndSettle();
+
+    // ต้องยืนยันผ่าน modal ก่อนถึงจะส่งคำขอจริง
+    expect(find.text('Submit a claim for 1 parcel(s)?'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('parcel-claim-confirm-submit')),
+    );
     await tester.pump();
     await tester.pumpAndSettle();
 
@@ -190,11 +210,10 @@ void main() {
       find.text('Claim request submitted. Please wait for admin approval'),
       findsOneWidget,
     );
+    // การค้นหาเป็นการกรองฝั่ง frontend — ไม่ส่งคำค้นไป backend
     expect(
-      repository.receivedQueries,
-      contains(
-        const UnownedParcelsQuery(page: 1, perPage: 20, searchText: 'sony'),
-      ),
+      repository.receivedQueries.every((query) => query.searchText.isEmpty),
+      isTrue,
     );
   });
 
@@ -206,18 +225,22 @@ void main() {
     await tester.pumpWidget(_buildTestApp(repository));
     await tester.pumpAndSettle();
 
-    await tester.drag(find.byType(ListView).first, const Offset(0, -250));
+    await tester.enterText(find.byType(TextField), 'xxxxx01');
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('#xxxxx01').first);
+
+    await tester.ensureVisible(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Checkbox));
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(InputChip, '#xxxxx01'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField), 'phillips');
+    await tester.enterText(find.byType(TextField), 'xxxxx21');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
-    expect(find.text('#xxxxx21'), findsOneWidget);
+    expect(find.text('1 parcels found'), findsOneWidget);
     expect(find.widgetWithText(InputChip, '#xxxxx01'), findsOneWidget);
 
     await tester.tap(

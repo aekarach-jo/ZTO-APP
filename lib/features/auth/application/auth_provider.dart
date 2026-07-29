@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/notifications/current_fcm_token_provider.dart';
+import '../../../core/notifications/push_token_service.dart';
 import '../../../core/network/network_providers.dart';
 import '../data/auth_repository.dart';
 
@@ -44,13 +45,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(
     this._authRepository, {
     required String? Function() readCurrentFcmToken,
+    required Future<String?> Function() ensureFcmToken,
     required VoidCallback onSessionDataChanged,
   }) : _readCurrentFcmToken = readCurrentFcmToken,
+       _ensureFcmToken = ensureFcmToken,
        _onSessionDataChanged = onSessionDataChanged,
        super(const AuthState());
 
   final AuthRepository _authRepository;
   final String? Function() _readCurrentFcmToken;
+  final Future<String?> Function() _ensureFcmToken;
   final VoidCallback _onSessionDataChanged;
   static final RegExp _phoneRegex = RegExp(r'^\+?[0-9]{8,15}$');
   static final RegExp _forgotPasswordPhoneRegex = RegExp(
@@ -106,10 +110,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         password: password,
       );
       _onSessionDataChanged();
-      final fcmToken = _readCurrentFcmToken();
-      if (fcmToken != null && fcmToken.isNotEmpty) {
-        unawaited(_authRepository.registerFcmToken(fcmToken: fcmToken));
-      }
+      unawaited(_registerFcmTokenWhenAvailable());
       state = state.copyWith(
         isLoading: false,
         message: 'login_success',
@@ -284,10 +285,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         otp: otp,
       );
       _onSessionDataChanged();
-      final fcmToken = _readCurrentFcmToken();
-      if (fcmToken != null && fcmToken.isNotEmpty) {
-        unawaited(_authRepository.registerFcmToken(fcmToken: fcmToken));
-      }
+      unawaited(_registerFcmTokenWhenAvailable());
       state = state.copyWith(
         isLoading: false,
         message: 'register_success',
@@ -300,6 +298,29 @@ class AuthNotifier extends StateNotifier<AuthState> {
         message: _mapRegisterError(error),
       );
       return false;
+    }
+  }
+
+  /// Points the backend at this device's push token once a session exists.
+  ///
+  /// Reading the cached token is enough on Android, where it is ready long
+  /// before anyone finishes logging in. iOS has to wait for APNs first, so the
+  /// token is often still missing at this point — falling back to a fresh fetch
+  /// is what keeps that device from staying unreachable by push for the rest of
+  /// the session.
+  Future<void> _registerFcmTokenWhenAvailable() async {
+    try {
+      final cached = _readCurrentFcmToken();
+      final token = (cached != null && cached.isNotEmpty)
+          ? cached
+          : await _ensureFcmToken();
+      if (token == null || token.isEmpty) {
+        return;
+      }
+      await _authRepository.registerFcmToken(fcmToken: token);
+    } catch (_) {
+      // Nothing to surface to the user: fcmTokenSyncProvider re-posts the token
+      // on the next refresh or app resume.
     }
   }
 
@@ -472,6 +493,7 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier(
     authRepository,
     readCurrentFcmToken: () => ref.read(currentFcmTokenProvider),
+    ensureFcmToken: () => ensurePushToken(ref),
     onSessionDataChanged: () {
       ref.invalidate(currentUserPhoneProvider);
       ref.invalidate(authTokensProvider);

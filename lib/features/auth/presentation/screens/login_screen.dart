@@ -2,9 +2,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../shared/utils/lao_phone_input.dart';
 import '../../../../shared/widgets/custom_text_field.dart';
 import '../../../../shared/widgets/language_toggle_button.dart';
 import '../../../../shared/widgets/primary_button.dart';
@@ -27,33 +27,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
-  static final RegExp _laosLocalPhoneRegex = RegExp(r'^20[0-9]{6,8}$');
+
+  /// The field only holds what follows `+856 20`, which the prefix already
+  /// shows: six to eight subscriber digits.
+  static final RegExp _subscriberDigitsRegex = RegExp(r'^[0-9]{6,8}$');
 
   String _normalizeLaosPhone(String input) {
-    var digitsOnly = input.replaceAll(RegExp(r'[^0-9]'), '');
+    final digitsOnly = input.replaceAll(RegExp(r'[^0-9]'), '');
     if (digitsOnly.isEmpty) {
       return '';
     }
-
-    if (digitsOnly.startsWith('856')) {
-      digitsOnly = digitsOnly.substring(3);
-    }
-    if (digitsOnly.startsWith('0')) {
-      digitsOnly = digitsOnly.substring(1);
-    }
-
-    return '+856$digitsOnly';
-  }
-
-  String _sanitizeLocalMobile(String input) {
-    var digitsOnly = input.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digitsOnly.startsWith('856')) {
-      digitsOnly = digitsOnly.substring(3);
-    }
-    if (digitsOnly.startsWith('0')) {
-      digitsOnly = digitsOnly.substring(1);
-    }
-    return digitsOnly;
+    return '$laoMobilePrefix$digitsOnly';
   }
 
   @override
@@ -176,24 +160,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           SizedBox(height: 22.h),
                           CustomTextField(
                             label: 'phone_number'.tr(),
-                            hintText: 'phone_local_hint'.tr(),
-                            prefixText: '+856 ',
+                            hintText: 'phone_subscriber_hint'.tr(),
+                            prefixText: '+856 20 ',
                             keyboardType: TextInputType.phone,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(r'[0-9 ]'),
-                              ),
-                              LengthLimitingTextInputFormatter(11),
+                            inputFormatters: const [
+                              LaoSubscriberNumberFormatter(),
                             ],
                             controller: _phoneController,
                             validator: (value) {
-                              final local = _sanitizeLocalMobile(
-                                value?.trim() ?? '',
-                              );
-                              if (local.isEmpty) {
+                              final digits = (value ?? '').trim();
+                              if (digits.isEmpty) {
                                 return 'required_field'.tr();
                               }
-                              if (!_laosLocalPhoneRegex.hasMatch(local)) {
+                              if (!_subscriberDigitsRegex.hasMatch(digits)) {
                                 return 'invalid_phone_number'.tr();
                               }
                               return null;

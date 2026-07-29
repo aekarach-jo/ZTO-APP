@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zto_app/core/notifications/current_fcm_token_provider.dart';
+import 'package:zto_app/core/notifications/push_token_service.dart';
 import 'package:zto_app/core/network/network_providers.dart';
 import 'package:zto_app/features/auth/application/auth_provider.dart';
 import 'package:zto_app/features/auth/data/auth_repository.dart';
@@ -73,6 +74,22 @@ class _TrackingAuthRepository extends _FakeAuthRepository {
   Future<void> registerFcmToken({required String fcmToken}) async {
     registeredFcmToken = fcmToken;
   }
+}
+
+class _FakePushTokenService implements PushTokenService {
+  _FakePushTokenService(this._token);
+
+  final String? _token;
+  int initializeCalls = 0;
+
+  @override
+  Future<String?> initializeAndGetToken() async {
+    initializeCalls += 1;
+    return _token;
+  }
+
+  @override
+  Stream<String> onTokenRefresh() => const Stream<String>.empty();
 }
 
 class _ErroringAuthRepository extends _FakeAuthRepository {
@@ -254,6 +271,47 @@ void main() {
 
     expect(success, isTrue);
     expect(trackingRepository.registeredFcmToken, 'fcm-123');
+  });
+
+  test('login fetches a token when none has arrived yet', () async {
+    final trackingRepository = _TrackingAuthRepository();
+    final pushTokenService = _FakePushTokenService('fcm-late');
+    final container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(trackingRepository),
+        pushTokenServiceProvider.overrideWithValue(pushTokenService),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final success = await container
+        .read(authProvider.notifier)
+        .login(phoneNumber: '+66891234567', password: '12345678');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(success, isTrue);
+    expect(pushTokenService.initializeCalls, 1);
+    expect(trackingRepository.registeredFcmToken, 'fcm-late');
+    expect(container.read(currentFcmTokenProvider), 'fcm-late');
+  });
+
+  test('login skips fcm registration when no token can be fetched', () async {
+    final trackingRepository = _TrackingAuthRepository();
+    final container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(trackingRepository),
+        pushTokenServiceProvider.overrideWithValue(_FakePushTokenService(null)),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final success = await container
+        .read(authProvider.notifier)
+        .login(phoneNumber: '+66891234567', password: '12345678');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(success, isTrue);
+    expect(trackingRepository.registeredFcmToken, isNull);
   });
 
   test('login success invalidates cached current user phone', () async {

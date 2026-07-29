@@ -10,7 +10,11 @@ import 'package:zto_app/features/profile/presentation/screens/profile_screen.dar
 
 import '../../test_helpers/mock_asset_loader.dart';
 
-Widget _buildTestApp(Widget child) {
+Widget _buildTestApp(
+  Widget child, {
+  VoidCallback? onStatusFetch,
+  VoidCallback? onOrdersFetch,
+}) {
   return EasyLocalization(
     supportedLocales: const [Locale('en')],
     path: 'unused',
@@ -40,6 +44,7 @@ Widget _buildTestApp(Widget child) {
                     );
                   }),
                   ordersProvider.overrideWith((ref) async {
+                    onOrdersFetch?.call();
                     return const [
                       OrderSummary(
                         id: 'o1',
@@ -51,6 +56,7 @@ Widget _buildTestApp(Widget child) {
                     ];
                   }),
                   parcelStatusProvider.overrideWith((ref) async {
+                    onStatusFetch?.call();
                     return const ParcelStatusPage(
                       counts: ParcelStatusCounts(
                         inProgress: 1,
@@ -141,5 +147,103 @@ void main() {
     expect(find.text('One Piece Vol.100'), findsOneWidget);
     expect(find.text('Sony WH-1000XM5 Headphones'), findsNothing);
     expect(find.text('At home'), findsNothing);
+  });
+
+  testWidgets('every summary card tap refetches the parcel status', (
+    tester,
+  ) async {
+    var statusFetches = 0;
+    await tester.pumpWidget(
+      _buildTestApp(
+        const ProfileScreen(),
+        onStatusFetch: () => statusFetches++,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(statusFetches, 1);
+
+    await tester.tap(find.byKey(const ValueKey('profile-summary-selfPickup')));
+    await tester.pumpAndSettle();
+    expect(statusFetches, 2);
+
+    // Tapping the tab that is already selected still refetches.
+    await tester.tap(find.byKey(const ValueKey('profile-summary-selfPickup')));
+    await tester.pumpAndSettle();
+    expect(statusFetches, 3);
+  });
+
+  testWidgets('every order history card tap refetches the orders', (
+    tester,
+  ) async {
+    var orderFetches = 0;
+    await tester.pumpWidget(
+      _buildTestApp(
+        const ProfileScreen(),
+        onOrdersFetch: () => orderFetches++,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Orders are only loaded once their tab is opened.
+    expect(orderFetches, 0);
+
+    await tester.tap(find.byKey(const ValueKey('profile-summary-orders')));
+    await tester.pumpAndSettle();
+    expect(orderFetches, 1);
+
+    await tester.tap(find.byKey(const ValueKey('profile-summary-orders')));
+    await tester.pumpAndSettle();
+    expect(orderFetches, 2);
+  });
+
+  testWidgets('pull to refresh reloads the selected tab, not the parcel page', (
+    tester,
+  ) async {
+    var statusFetches = 0;
+    var orderFetches = 0;
+    await tester.pumpWidget(
+      _buildTestApp(
+        const ProfileScreen(),
+        onStatusFetch: () => statusFetches++,
+        onOrdersFetch: () => orderFetches++,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('profile-summary-orders')));
+    await tester.pumpAndSettle();
+    expect(statusFetches, 1);
+    expect(orderFetches, 1);
+
+    await tester
+        .state<RefreshIndicatorState>(find.byType(RefreshIndicator))
+        .show();
+    await tester.pumpAndSettle();
+
+    // Orders tab is open, so the drag reloads the orders and leaves the
+    // parcel page alone.
+    expect(orderFetches, 2);
+    expect(statusFetches, 1);
+  });
+
+  testWidgets('pull to refresh on a parcel tab reloads the parcel page', (
+    tester,
+  ) async {
+    var statusFetches = 0;
+    await tester.pumpWidget(
+      _buildTestApp(
+        const ProfileScreen(),
+        onStatusFetch: () => statusFetches++,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(statusFetches, 1);
+
+    await tester
+        .state<RefreshIndicatorState>(find.byType(RefreshIndicator))
+        .show();
+    await tester.pumpAndSettle();
+
+    expect(statusFetches, 2);
   });
 }

@@ -1,6 +1,8 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/utils/lak_currency.dart';
+import '../../../../shared/utils/lao_phone_input.dart';
 import '../../application/send_forward_prefill_provider.dart';
 import '../../data/send_repository.dart';
 import '../../../home/data/home_parcel_repository.dart';
@@ -32,23 +35,39 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   final _recipientPhoneController = TextEditingController();
   final _recipientAddressController = TextEditingController();
   final _courierController = TextEditingController();
-  final _branchController = TextEditingController();
+  String? _selectedBranch;
   LatLng _pinLocation = const LatLng(17.9757, 102.6331);
+
+  /// The branches parcels can be delivered to.
+  static const List<String> _deliveryBranches = [
+    'ອານຸສິດ',
+    'ຮຸ່ງອາລຸນ',
+    'ມີໄຊ',
+  ];
 
   /// Order ที่สร้างไว้แล้วสำหรับ flow ปัจจุบัน — กันการสร้าง order ซ้ำ
   /// ถ้าผู้ใช้ย้อนกลับจากหน้าชำระเงินแล้วกดยืนยันอีกครั้ง
   ParcelOrder? _createdOrder;
 
+  /// The phone field holds only what follows the `+856 20` prefix it shows.
+  String get _recipientPhoneNumber {
+    final digits = _recipientPhoneController.text.replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
+    return digits.isEmpty ? '' : '$laoMobilePrefix$digits';
+  }
+
   bool get _isRecipientFormComplete {
-    final phoneDigits = _recipientPhoneController.text.replaceAll(
+    final subscriberDigits = _recipientPhoneController.text.replaceAll(
       RegExp(r'[^0-9]'),
       '',
     );
     return _recipientNameController.text.trim().isNotEmpty &&
         _recipientAddressController.text.trim().isNotEmpty &&
         _courierController.text.trim().isNotEmpty &&
-        _branchController.text.trim().isNotEmpty &&
-        phoneDigits.length >= 8;
+        _selectedBranch != null &&
+        subscriberDigits.length >= 6;
   }
 
   @override
@@ -57,7 +76,6 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     _recipientPhoneController.dispose();
     _recipientAddressController.dispose();
     _courierController.dispose();
-    _branchController.dispose();
     super.dispose();
   }
 
@@ -202,6 +220,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
           hint: _SendTextKeys.recipientPhoneHint.tr(),
           controller: _recipientPhoneController,
           onChanged: (_) => setState(() {}),
+          prefixText: '+856 20 ',
+          keyboardType: TextInputType.phone,
+          inputFormatters: const [LaoSubscriberNumberFormatter()],
         ),
         SizedBox(height: 14.h),
         _InputLabel(text: _SendTextKeys.recipientAddressLabel.tr()),
@@ -236,11 +257,17 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _InputLabel(text: _SendTextKeys.branchLabel.tr()),
-                  _InputField(
+                  _DropdownField<String>(
                     key: const ValueKey('send-input-branch'),
                     hint: _SendTextKeys.branchHint.tr(),
-                    controller: _branchController,
-                    onChanged: (_) => setState(() {}),
+                    value: _selectedBranch,
+                    items: _deliveryBranches,
+                    itemLabel: (branch) => branch,
+                    onChanged: (branch) {
+                      setState(() {
+                        _selectedBranch = branch;
+                      });
+                    },
                   ),
                 ],
               ),
@@ -329,6 +356,15 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                           myLocationButtonEnabled: false,
                           zoomControlsEnabled: false,
                           mapToolbarEnabled: false,
+                          // The map sits inside the scrolling form, which
+                          // otherwise wins every drag and leaves the map
+                          // unpannable. Claim gestures that start on the map.
+                          gestureRecognizers:
+                              <Factory<OneSequenceGestureRecognizer>>{
+                                Factory<OneSequenceGestureRecognizer>(
+                                  EagerGestureRecognizer.new,
+                                ),
+                              },
                         ),
                 ),
                 Positioned(
@@ -603,10 +639,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                 CreateForwardRequest(
                   parcelId: selectedItem.id,
                   recipientName: _recipientNameController.text.trim(),
-                  recipientPhone: _recipientPhoneController.text.trim(),
+                  recipientPhone: _recipientPhoneNumber,
                   recipientAddress: _recipientAddressController.text.trim(),
                   courierName: _courierController.text.trim(),
-                  branchName: _branchController.text.trim(),
+                  branchName: _selectedBranch ?? '',
                   latitude: _pinLocation.latitude,
                   longitude: _pinLocation.longitude,
                 ),
@@ -672,7 +708,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     _recipientPhoneController.clear();
     _recipientAddressController.clear();
     _courierController.clear();
-    _branchController.clear();
+    _selectedBranch = null;
   }
 
   void _showNotImplementedSnack(BuildContext context) {
@@ -864,6 +900,9 @@ class _InputField extends StatelessWidget {
     required this.onChanged,
     this.maxLines = 1,
     this.minLines,
+    this.prefixText,
+    this.keyboardType,
+    this.inputFormatters,
   });
 
   final String hint;
@@ -871,6 +910,9 @@ class _InputField extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final int maxLines;
   final int? minLines;
+  final String? prefixText;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -879,6 +921,8 @@ class _InputField extends StatelessWidget {
       onChanged: onChanged,
       maxLines: maxLines,
       minLines: minLines,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(
@@ -886,6 +930,79 @@ class _InputField extends StatelessWidget {
           fontSize: 14.sp,
           fontWeight: FontWeight.w700,
         ),
+        prefixText: prefixText,
+        prefixStyle: TextStyle(
+          color: const Color(0xFF111111),
+          fontSize: 14.sp,
+          fontWeight: FontWeight.w700,
+        ),
+        filled: true,
+        fillColor: const Color(0xFFF3F5F8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14.r),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14.r),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
+      ),
+    );
+  }
+}
+
+/// Picker styled to sit next to [_InputField] in the same row: same fill,
+/// radius and padding, so a chosen branch reads like the typed courier beside
+/// it rather than a different kind of control.
+class _DropdownField<T> extends StatelessWidget {
+  const _DropdownField({
+    super.key,
+    required this.hint,
+    required this.value,
+    required this.items,
+    required this.itemLabel,
+    required this.onChanged,
+  });
+
+  final String hint;
+  final T? value;
+  final List<T> items;
+  final String Function(T item) itemLabel;
+  final ValueChanged<T?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<T>(
+      initialValue: value,
+      isExpanded: true,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+      iconEnabledColor: const Color(0xFF7A869A),
+      borderRadius: BorderRadius.circular(14.r),
+      style: TextStyle(
+        color: const Color(0xFF111111),
+        fontSize: 14.sp,
+        fontWeight: FontWeight.w700,
+      ),
+      hint: Text(
+        hint,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: const Color(0xFFA7AFBC),
+          fontSize: 14.sp,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      items: [
+        for (final item in items)
+          DropdownMenuItem<T>(
+            key: ValueKey('send-branch-option-${itemLabel(item)}'),
+            value: item,
+            child: Text(itemLabel(item), overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      onChanged: onChanged,
+      decoration: InputDecoration(
         filled: true,
         fillColor: const Color(0xFFF3F5F8),
         border: OutlineInputBorder(

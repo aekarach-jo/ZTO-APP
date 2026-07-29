@@ -45,6 +45,7 @@ class ParcelOrder {
     this.currency = 'LAK',
     this.weight,
     this.recipientName,
+    this.billNo,
     this.items = const [],
   });
 
@@ -55,6 +56,10 @@ class ParcelOrder {
   final String currency;
   final double? weight;
   final String? recipientName;
+
+  /// Human-readable bill number shown on the receipt (e.g. `2607-00020`).
+  /// Null until the backend starts sending it.
+  final String? billNo;
   final List<OrderItem> items;
 
   bool get isPaid => paymentStatus == 'paid';
@@ -70,6 +75,7 @@ class ParcelOrder {
       currency: (json['currency'] ?? 'LAK').toString(),
       weight: _readDouble(json['weight']),
       recipientName: json['recipientName']?.toString(),
+      billNo: _readRef(json['billNo']),
       items: rawItems is List
           ? rawItems
                 .whereType<Map<String, dynamic>>()
@@ -91,12 +97,18 @@ class PaymentInitiation {
     required this.method,
     this.qrString,
     this.paymentUrl,
+    this.billNo,
+    this.paymentNo,
   });
 
   final String transactionRef;
   final String method;
   final String? qrString;
   final String? paymentUrl;
+
+  /// Receipt numbers, if the backend already issues them at this step.
+  final String? billNo;
+  final String? paymentNo;
 
   factory PaymentInitiation.fromResponse(dynamic data) {
     final json = unwrapDataEnvelope(data);
@@ -105,17 +117,34 @@ class PaymentInitiation {
       method: (json['method'] ?? '').toString(),
       qrString: json['qrString']?.toString(),
       paymentUrl: json['paymentUrl']?.toString(),
+      billNo: _readRef(json['billNo']),
+      paymentNo: _readRef(json['paymentNo']),
     );
   }
 }
 
 /// Result of `GET /orders/{orderId}/payment-status`.
 class OrderPaymentStatus {
-  const OrderPaymentStatus({required this.isPaid, this.bankRef, this.paidAt});
+  const OrderPaymentStatus({
+    required this.isPaid,
+    this.bankRef,
+    this.paidAt,
+    this.billNo,
+    this.paymentNo,
+    this.amount,
+  });
 
   final bool isPaid;
   final String? bankRef;
   final DateTime? paidAt;
+
+  /// Receipt numbers issued once the payment settles. Null until the backend
+  /// adds them (see API_REQUEST_BILL_NO.md); the receipt hides missing rows.
+  final String? billNo;
+  final String? paymentNo;
+
+  /// Amount actually charged, used to reconcile the receipt total.
+  final int? amount;
 
   factory OrderPaymentStatus.fromResponse(dynamic data) {
     final json = unwrapDataEnvelope(data);
@@ -125,6 +154,9 @@ class OrderPaymentStatus {
       paidAt: json['paidAt'] is String
           ? DateTime.tryParse(json['paidAt'] as String)
           : null,
+      billNo: _readRef(json['billNo']),
+      paymentNo: _readRef(json['paymentNo']),
+      amount: _readInt(json['amount']),
     );
   }
 }
@@ -198,6 +230,16 @@ Map<String, dynamic> unwrapDataEnvelope(dynamic data) {
 /// cleanly, falling back to the raw string for non-numeric ids.
 Object asLaravelParcelId(String id) {
   return int.tryParse(id.trim()) ?? id;
+}
+
+/// Reads an optional reference string (bill/payment number), treating empty
+/// strings as absent so the receipt doesn't render blank rows.
+String? _readRef(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  final text = value.toString().trim();
+  return text.isEmpty ? null : text;
 }
 
 int? _readInt(dynamic value) {

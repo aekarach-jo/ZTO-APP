@@ -25,4 +25,32 @@ void main() {
       );
     },
   );
+
+  group('shouldRefreshOnResume', () {
+    final now = DateTime(2026, 7, 26, 20, 39);
+
+    test('refreshes when the app has never refreshed on resume', () {
+      expect(shouldRefreshOnResume(now: now, lastRefreshAt: null), isTrue);
+    });
+
+    test('skips a resume that follows a recent refresh', () {
+      expect(
+        shouldRefreshOnResume(
+          now: now,
+          lastRefreshAt: now.subtract(const Duration(seconds: 5)),
+        ),
+        isFalse,
+      );
+    });
+
+    test('refreshes once the throttle window has elapsed', () {
+      expect(
+        shouldRefreshOnResume(
+          now: now,
+          lastRefreshAt: now.subtract(resumeRefreshMinInterval),
+        ),
+        isTrue,
+      );
+    });
+  });
 }

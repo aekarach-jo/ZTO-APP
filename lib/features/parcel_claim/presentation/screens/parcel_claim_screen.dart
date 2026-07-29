@@ -3,12 +3,40 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/network/network_providers.dart';
 import '../../../../shared/widgets/primary_button.dart';
 import '../../data/parcel_claim_repository.dart';
+
+const String _trackNoPrefix = '#';
+
+/// บังคับให้ช่องค้นหาขึ้นต้นด้วย `#` เสมอ และลบ `#` ที่ผู้ใช้พิมพ์เองซ้ำออก
+class _TrackNoMaskFormatter extends TextInputFormatter {
+  const _TrackNoMaskFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final body = newValue.text.replaceAll(_trackNoPrefix, '');
+    final text = '$_trackNoPrefix$body';
+    final removedBeforeCursor =
+        newValue.text.length - body.length - _trackNoPrefix.length;
+    final offset = (newValue.selection.end - removedBeforeCursor).clamp(
+      _trackNoPrefix.length,
+      text.length,
+    );
+
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: offset),
+    );
+  }
+}
 
 class ParcelClaimScreen extends ConsumerStatefulWidget {
   const ParcelClaimScreen({super.key});
@@ -22,8 +50,12 @@ class ParcelClaimScreen extends ConsumerStatefulWidget {
 class _ParcelClaimScreenState extends ConsumerState<ParcelClaimScreen> {
   static const int _perPage = 20;
   static const double _loadMoreExtentThreshold = 240;
+  static const int _minSearchLength = 4;
 
-  final TextEditingController _searchController = TextEditingController();
+  /// ช่องค้นหาแสดง `#` นำหน้าเสมอ ผู้ใช้จึงพิมพ์แค่ตัวเลขพัสดุ
+  final TextEditingController _searchController = TextEditingController(
+    text: _trackNoPrefix,
+  );
   final ScrollController _scrollController = ScrollController();
   final Map<String, _SelectedParcel> _selectedParcels =
       <String, _SelectedParcel>{};
@@ -39,14 +71,37 @@ class _ParcelClaimScreenState extends ConsumerState<ParcelClaimScreen> {
   Object? _loadError;
   List<UnownedParcel> _items = const <UnownedParcel>[];
 
-  bool get _hasNextPage =>
-      _items.isEmpty || (_currentPage > 0 && _items.length < _total);
+  bool get _hasNextPage => _currentPage > 0 && _items.length < _total;
 
-  UnownedParcelsQuery _buildQuery(int page) => UnownedParcelsQuery(
-    page: page,
-    perPage: _perPage,
-    searchText: _searchText,
-  );
+  bool get _hasSearchQuery => _searchText.length >= _minSearchLength;
+
+  /// รายการที่ตรงกับคำค้น — ต้องกรอกเลขพัสดุให้ครบทั้งเลข ถึงจะแสดงผล
+  List<UnownedParcel> get _visibleItems {
+    if (!_hasSearchQuery) {
+      return const <UnownedParcel>[];
+    }
+    final keyword = _searchText.toLowerCase();
+    return _items
+        .where(
+          (parcel) =>
+              parcel.trackNo.replaceAll(_trackNoPrefix, '').toLowerCase() ==
+              keyword,
+        )
+        .toList(growable: false);
+  }
+
+  /// ถือว่ากรอกครบเมื่อยาวไม่น้อยกว่าเลขพัสดุที่สั้นที่สุดที่โหลดมา
+  bool get _searchLooksComplete {
+    final shortest = _items.isEmpty
+        ? _minSearchLength
+        : _items
+              .map((parcel) => parcel.trackNo.replaceAll(_trackNoPrefix, '').length)
+              .reduce((a, b) => a < b ? a : b);
+    return _searchText.length >= shortest;
+  }
+
+  UnownedParcelsQuery _buildQuery(int page) =>
+      UnownedParcelsQuery(page: page, perPage: _perPage);
 
   @override
   void initState() {
@@ -185,6 +240,10 @@ class _ParcelClaimScreenState extends ConsumerState<ParcelClaimScreen> {
   }
 
   Widget _buildParcelResults() {
+    if (!_hasSearchQuery) {
+      return _EmptyState(message: 'parcel_claim_search_prompt'.tr());
+    }
+
     if (_isInitialLoading && _items.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 48),
@@ -199,15 +258,21 @@ class _ParcelClaimScreenState extends ConsumerState<ParcelClaimScreen> {
       );
     }
 
-    if (_items.isEmpty) {
-      return _EmptyState(message: 'parcel_claim_empty'.tr());
+    final visibleItems = _visibleItems;
+    if (visibleItems.isEmpty) {
+      // ยังพิมพ์ไม่ครบเลข ให้ชวนกรอกต่อ ไม่ใช่บอกว่าหาไม่เจอ
+      return _EmptyState(
+        message: _searchLooksComplete
+            ? 'parcel_claim_empty'.tr()
+            : 'parcel_claim_search_prompt'.tr(),
+      );
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'parcel_claim_total_label'.tr(args: ['$_total']),
+          'parcel_claim_total_label'.tr(args: ['${visibleItems.length}']),
           style: TextStyle(
             color: const Color(0xFF677689),
             fontSize: 13.sp,
@@ -215,13 +280,13 @@ class _ParcelClaimScreenState extends ConsumerState<ParcelClaimScreen> {
           ),
         ),
         SizedBox(height: 12.h),
-        for (var i = 0; i < _items.length; i++) ...[
+        for (var i = 0; i < visibleItems.length; i++) ...[
           _ParcelSelectionCard(
-            parcel: _items[i],
-            selected: _selectedParcels.containsKey(_items[i].selectionKey),
-            onChanged: (selected) => _toggleSelection(_items[i], selected),
+            parcel: visibleItems[i],
+            selected: _selectedParcels.containsKey(visibleItems[i].selectionKey),
+            onChanged: (selected) => _toggleSelection(visibleItems[i], selected),
           ),
-          if (i != _items.length - 1) SizedBox(height: 12.h),
+          if (i != visibleItems.length - 1) SizedBox(height: 12.h),
         ],
         _LoadMoreFooter(
           isLoading: _isLoadingMore,
@@ -240,9 +305,9 @@ class _ParcelClaimScreenState extends ConsumerState<ParcelClaimScreen> {
         return;
       }
       setState(() {
-        _searchText = value.trim();
+        // `#` เป็นแค่ mask ของช่องกรอก ไม่ใช่ส่วนหนึ่งของคำค้น
+        _searchText = value.replaceAll(_trackNoPrefix, '').trim();
       });
-      _reloadParcels();
     });
   }
 
@@ -338,6 +403,18 @@ class _ParcelClaimScreenState extends ConsumerState<ParcelClaimScreen> {
         _isInitialLoading = false;
         _isLoadingMore = false;
       });
+
+      // รายการถูกซ่อนไว้จนกว่าจะกรอกคำค้น ผู้ใช้จึงเลื่อนจอเพื่อโหลดหน้าถัดไป
+      // ไม่ได้ — ดึงหน้าที่เหลือต่อเองให้ครบ เพื่อให้ค้นหาเจอทุกรายการ
+      if (pageData.items.isNotEmpty && _hasNextPage) {
+        unawaited(
+          _loadPage(
+            page: _currentPage + 1,
+            reset: false,
+            requestVersion: requestVersion,
+          ),
+        );
+      }
     } catch (error) {
       if (!mounted || requestVersion != _requestVersion) {
         return;
@@ -351,6 +428,11 @@ class _ParcelClaimScreenState extends ConsumerState<ParcelClaimScreen> {
   }
 
   Future<void> _submitClaim() async {
+    final confirmed = await _confirmSubmit();
+    if (!confirmed || !mounted) {
+      return;
+    }
+
     setState(() {
       _isSubmitting = true;
     });
@@ -387,6 +469,66 @@ class _ParcelClaimScreenState extends ConsumerState<ParcelClaimScreen> {
         });
       }
     }
+  }
+
+  /// ถามยืนยันก่อนส่งคำขอ เพราะการอ้างสิทธิ์ต้องให้ Admin ตรวจสอบ
+  Future<bool> _confirmSubmit() async {
+    final trackNos = _selectedParcels.values
+        .map((parcel) => parcel.trackNo)
+        .join('\n');
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('parcel-claim-confirm-dialog'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        title: Text(
+          'parcel_claim_confirm_title'.tr(),
+          style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w800),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'parcel_claim_confirm_message'.tr(
+                args: ['${_selectedParcels.length}'],
+              ),
+              style: TextStyle(
+                color: const Color(0xFF4D5C6B),
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 10.h),
+            Text(
+              trackNos,
+              style: TextStyle(
+                color: const Color(0xFF171717),
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('parcel-claim-confirm-cancel'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text('common_cancel'.tr()),
+          ),
+          TextButton(
+            key: const ValueKey('parcel-claim-confirm-submit'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('parcel_claim_confirm_action'.tr()),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
   String _mapLoadError(Object error) {
@@ -466,6 +608,7 @@ class _SearchField extends StatelessWidget {
     return TextField(
       controller: controller,
       onChanged: onChanged,
+      inputFormatters: const [_TrackNoMaskFormatter()],
       decoration: InputDecoration(
         hintText: 'parcel_claim_search_hint'.tr(),
         hintStyle: const TextStyle(

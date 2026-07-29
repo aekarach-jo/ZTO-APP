@@ -268,7 +268,7 @@ class _BottomNavItemContent extends StatelessWidget {
   }
 }
 
-class _MainTopBar extends StatelessWidget {
+class _MainTopBar extends ConsumerWidget {
   const _MainTopBar({
     required this.isCustomer,
     required this.currentLocale,
@@ -282,7 +282,10 @@ class _MainTopBar extends StatelessWidget {
   final VoidCallback onLogout;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // โลโก้บน top bar เปลี่ยนตามสาขาที่เลือกไว้ (KD ใช้โลโก้ ZTO Savannakhet)
+    final branchCode = ref.watch(selectedBranchCodeProvider).valueOrNull;
+
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -306,6 +309,7 @@ class _MainTopBar extends StatelessWidget {
                       width: double.infinity,
                       height: 42.h,
                       framed: true,
+                      branchCode: branchCode,
                       padding: EdgeInsets.symmetric(
                         horizontal: 10.w,
                         vertical: 8.h,

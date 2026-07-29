@@ -68,6 +68,20 @@ class _SuccessAuthRepository implements AuthRepository {
   Future<void> logout() async {}
 }
 
+class _RecordingAuthRepository extends _SuccessAuthRepository {
+  _RecordingAuthRepository();
+
+  String? loginPhoneNumber;
+
+  @override
+  Future<void> loginWithPassword({
+    required String phoneNumber,
+    required String password,
+  }) async {
+    loginPhoneNumber = phoneNumber;
+  }
+}
+
 class _FailingAuthRepository implements AuthRepository {
   const _FailingAuthRepository();
 
@@ -213,6 +227,24 @@ void main() {
     await tester.tap(find.text('Login'));
     await tester.pumpAndSettle();
 
+    expect(find.text('MAIN_SCREEN'), findsOneWidget);
+  });
+
+  testWidgets('sends the subscriber digits with the +85620 prefix', (
+    tester,
+  ) async {
+    final repository = _RecordingAuthRepository();
+    await tester.pumpWidget(_buildTestApp(authRepository: repository));
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), '9123456');
+    await tester.enterText(fields.at(1), '123456');
+
+    await tester.tap(find.text('Login'));
+    await tester.pumpAndSettle();
+
+    expect(repository.loginPhoneNumber, '+856209123456');
     expect(find.text('MAIN_SCREEN'), findsOneWidget);
   });
 

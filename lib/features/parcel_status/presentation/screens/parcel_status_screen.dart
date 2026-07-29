@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+import '../../../../core/refresh/in_place_refresh.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/utils/lak_currency.dart';
 import '../../../orders/data/order_repository.dart';
 import '../../../orders/presentation/screens/order_history_screen.dart';
+import '../../application/parcel_status_tab_provider.dart';
 import '../../data/parcel_status_repository.dart';
 
 class ParcelStatusScreen extends ConsumerStatefulWidget {
@@ -21,42 +23,18 @@ class ParcelStatusScreen extends ConsumerStatefulWidget {
 class _ParcelStatusScreenState extends ConsumerState<ParcelStatusScreen> {
   @override
   Widget build(BuildContext context) {
-    final statusAsync = ref.watch(parcelStatusProvider);
-
     return Scaffold(
       appBar: AppBar(title: Text('status_title'.tr())),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () => ref.refresh(parcelStatusProvider.future),
-          child: statusAsync.when(
-            // Show the spinner while refetching (e.g. after a branch switch)
-            // instead of holding the previous branch's data on screen.
-            skipLoadingOnRefresh: false,
-            data: (page) => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
-              children: [ParcelStatusSection(page: page)],
-            ),
-            loading: () => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: const [
-                SizedBox(height: 240),
-                Center(child: CircularProgressIndicator()),
-              ],
-            ),
-            error: (error, stackTrace) => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                const SizedBox(height: 220),
-                Center(
-                  child: TextButton(
-                    key: const ValueKey('parcel-status-retry'),
-                    onPressed: () => ref.invalidate(parcelStatusProvider),
-                    child: Text('common_retry'.tr()),
-                  ),
-                ),
-              ],
-            ),
+          // Pull-to-refresh reloads whichever tab is on screen, so dragging on
+          // the orders tab refetches the orders rather than the parcel page.
+          onRefresh: () =>
+              refreshParcelStatusTab(ref, ref.read(parcelStatusTabProvider)),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
+            children: const [ParcelStatusSection()],
           ),
         ),
       ),
@@ -70,11 +48,9 @@ class _ParcelStatusScreenState extends ConsumerState<ParcelStatusScreen> {
 class ParcelStatusSection extends ConsumerStatefulWidget {
   const ParcelStatusSection({
     super.key,
-    required this.page,
     this.summaryKeyPrefix = 'parcel-status-count',
   });
 
-  final ParcelStatusPage page;
   final String summaryKeyPrefix;
 
   @override
@@ -83,39 +59,53 @@ class ParcelStatusSection extends ConsumerStatefulWidget {
 }
 
 class _ParcelStatusSectionState extends ConsumerState<ParcelStatusSection> {
-  ParcelStatusCategory _selectedCategory = ParcelStatusCategory.inProgress;
-
-  /// When true, the "Order history" card is selected and the section shows the
-  /// user's orders inline instead of the parcel-status cards.
-  bool _showOrders = false;
-
-  static const List<ParcelStatusCategory> _categories = [
-    ParcelStatusCategory.inProgress,
-    ParcelStatusCategory.selfPickup,
-    ParcelStatusCategory.forwarded,
+  static const List<ParcelStatusTab> _parcelTabs = [
+    ParcelStatusTab.inProgress,
+    ParcelStatusTab.selfPickup,
+    ParcelStatusTab.forwarded,
   ];
+
+  /// Every tap refetches the tab it selects — including a tap on the tab that
+  /// is already active — so the cards double as a refresh control.
+  void _selectTab(ParcelStatusTab tab) {
+    ref.read(parcelStatusTabProvider.notifier).state = tab;
+    refreshParcelStatusTab(ref, tab);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final tab = ref.watch(parcelStatusTabProvider);
+    final statusAsync = ref.watch(parcelStatusProvider);
+    final page = statusAsync.valueOrNull;
+    final inPlaceRefresh = ref.watch(isRefreshingInPlaceProvider);
+
+    // Nothing to draw the cards from yet, or a reload that swaps in a different
+    // data set (a branch switch): blank the whole section rather than leave the
+    // previous branch's counts sitting there.
+    if (page == null || (statusAsync.isLoading && !inPlaceRefresh)) {
+      if (statusAsync.hasError && !statusAsync.isLoading) {
+        return _SectionRetry(
+          retryKey: const ValueKey('parcel-status-retry'),
+          onRetry: () => ref.invalidate(parcelStatusProvider),
+        );
+      }
+      return const _SectionLoader();
+    }
+
     return Column(
       children: [
         Row(
           children: [
-            for (var i = 0; i < _categories.length; i++) ...[
+            for (var i = 0; i < _parcelTabs.length; i++) ...[
               Expanded(
                 child: _CountCard(
                   cardKey: ValueKey(
-                    '${widget.summaryKeyPrefix}-${_categories[i].name}',
+                    '${widget.summaryKeyPrefix}-${_parcelTabs[i].name}',
                   ),
-                  category: _categories[i],
-                  count: widget.page.counts.forCategory(_categories[i]),
-                  selected: !_showOrders && _selectedCategory == _categories[i],
-                  onTap: () {
-                    setState(() {
-                      _showOrders = false;
-                      _selectedCategory = _categories[i];
-                    });
-                  },
+                  category: _parcelTabs[i].category!,
+                  count: page.counts.forCategory(_parcelTabs[i].category!),
+                  selected: tab == _parcelTabs[i],
+                  onTap: () => _selectTab(_parcelTabs[i]),
                 ),
               ),
               SizedBox(width: 8.w),
@@ -124,27 +114,41 @@ class _ParcelStatusSectionState extends ConsumerState<ParcelStatusSection> {
             Expanded(
               child: _OrderHistoryCard(
                 cardKey: ValueKey('${widget.summaryKeyPrefix}-orders'),
-                selected: _showOrders,
-                onTap: () {
-                  setState(() {
-                    _showOrders = true;
-                  });
-                },
+                selected: tab == ParcelStatusTab.orders,
+                onTap: () => _selectTab(ParcelStatusTab.orders),
               ),
             ),
           ],
         ),
         SizedBox(height: 16.h),
-        if (_showOrders)
-          ..._buildOrdersContent()
-        else
-          ..._buildParcelContent(),
+        ..._buildContent(tab, statusAsync, page),
       ],
     );
   }
 
-  List<Widget> _buildParcelContent() {
-    final items = widget.page.forCategory(_selectedCategory);
+  List<Widget> _buildContent(
+    ParcelStatusTab tab,
+    AsyncValue<ParcelStatusPage> statusAsync,
+    ParcelStatusPage page,
+  ) {
+    if (tab == ParcelStatusTab.orders) {
+      return _buildOrdersContent();
+    }
+    // A tab tap or pull-to-refresh is refetching the parcel page: swap only the
+    // list for a spinner and leave the cards above it in place.
+    if (statusAsync.isLoading) {
+      return const [_SectionLoader()];
+    }
+    if (statusAsync.hasError) {
+      return [
+        _SectionRetry(
+          retryKey: const ValueKey('parcel-status-retry'),
+          onRetry: () => ref.invalidate(parcelStatusProvider),
+        ),
+      ];
+    }
+
+    final items = page.forCategory(tab.category!);
     if (items.isEmpty) {
       return [_EmptyState(message: 'status_empty'.tr())];
     }
@@ -162,6 +166,9 @@ class _ParcelStatusSectionState extends ConsumerState<ParcelStatusSection> {
   List<Widget> _buildOrdersContent() {
     final ordersAsync = ref.watch(ordersProvider);
     return ordersAsync.when(
+      // Selecting this tab refetches the orders; show that as loading instead
+      // of leaving the previous list on screen until the response lands.
+      skipLoadingOnRefresh: false,
       data: (orders) {
         if (orders.isEmpty) {
           return [_EmptyState(message: 'order_history_empty'.tr())];
@@ -176,21 +183,46 @@ class _ParcelStatusSectionState extends ConsumerState<ParcelStatusSection> {
           ],
         ];
       },
-      loading: () => [
-        Padding(
-          padding: EdgeInsets.only(top: 18.h),
-          child: const Center(child: CircularProgressIndicator()),
-        ),
-      ],
+      loading: () => const [_SectionLoader()],
       error: (error, stackTrace) => [
-        Center(
-          child: TextButton(
-            key: const ValueKey('profile-orders-retry'),
-            onPressed: () => ref.invalidate(ordersProvider),
-            child: Text('common_retry'.tr()),
-          ),
+        _SectionRetry(
+          retryKey: const ValueKey('profile-orders-retry'),
+          onRetry: () => ref.invalidate(ordersProvider),
         ),
       ],
+    );
+  }
+}
+
+class _SectionLoader extends StatelessWidget {
+  const _SectionLoader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 28.h),
+      child: const Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _SectionRetry extends StatelessWidget {
+  const _SectionRetry({required this.retryKey, required this.onRetry});
+
+  final Key retryKey;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 18.h),
+      child: Center(
+        child: TextButton(
+          key: retryKey,
+          onPressed: onRetry,
+          child: Text('common_retry'.tr()),
+        ),
+      ),
     );
   }
 }
