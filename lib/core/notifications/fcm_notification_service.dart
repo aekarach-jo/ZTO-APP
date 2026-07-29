@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,7 +13,9 @@ import '../../features/main_layout/application/main_layout_navigation_provider.d
 import '../../features/main_layout/presentation/screens/main_layout_screen.dart';
 import '../../features/notifications/data/notification_repository.dart';
 import '../../features/parcel_status/data/parcel_status_repository.dart';
+import '../refresh/in_place_refresh.dart';
 import '../router/app_router.dart';
+import 'push_token_service.dart';
 
 const AndroidNotificationChannel
 _ztoNotificationChannel = AndroidNotificationChannel(
@@ -36,6 +39,23 @@ void refreshFcmRelatedProviders(
   invalidate(notificationsProvider);
   invalidate(homeParcelsProvider);
   invalidate(parcelStatusProvider);
+}
+
+/// Shortest gap between two resume-triggered refetches. App switching is cheap
+/// and frequent, so without this every alt-tab would re-hit the parcel and
+/// notification endpoints.
+const resumeRefreshMinInterval = Duration(seconds: 15);
+
+/// Whether a resume should refetch, given when the last resume refresh ran.
+/// Pulled out of the service so the throttle can be tested without a binding.
+bool shouldRefreshOnResume({
+  required DateTime now,
+  required DateTime? lastRefreshAt,
+}) {
+  if (lastRefreshAt == null) {
+    return true;
+  }
+  return now.difference(lastRefreshAt) >= resumeRefreshMinInterval;
 }
 
 Future<bool> _ensureFirebaseInitialized() async {
@@ -82,6 +102,16 @@ Future<void> _initializeLocalNotifications({
       >();
   await androidPlugin?.createNotificationChannel(_ztoNotificationChannel);
   await androidPlugin?.requestNotificationsPermission();
+}
+
+/// Initializes the platform local-notification plugin before the widget tree is
+/// created. Calling it again from [FcmNotificationService] is safe and only
+/// attaches the notification-tap callback.
+Future<void> configureLocalNotifications() async {
+  if (kIsWeb) {
+    return;
+  }
+  await _initializeLocalNotifications();
 }
 
 Future<void> configureFcmBackgroundHandler() async {
@@ -132,6 +162,8 @@ class FcmNotificationService {
   final Ref _ref;
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
   StreamSubscription<RemoteMessage>? _openedSubscription;
+  AppLifecycleListener? _lifecycleListener;
+  DateTime? _lastResumeRefreshAt;
   bool _isInitialized = false;
 
   Future<void> initialize() async {
@@ -139,6 +171,12 @@ class FcmNotificationService {
       return;
     }
     _isInitialized = true;
+
+    // Set this up before Firebase: a push that lands while the app is
+    // backgrounded is handled in a separate isolate and cannot invalidate
+    // providers, so resuming is the only chance to pick that change up when the
+    // user comes back without tapping the notification.
+    _lifecycleListener = AppLifecycleListener(onResume: _handleAppResumed);
 
     final initialized = await _ensureFirebaseInitialized();
     if (!initialized) {
@@ -157,9 +195,11 @@ class FcmNotificationService {
     _logFcm('Permission status=${settings.authorizationStatus.name}');
     await FirebaseMessaging.instance
         .setForegroundNotificationPresentationOptions(
-          alert: true,
-          badge: true,
-          sound: true,
+          // Foreground pushes are displayed by flutter_local_notifications
+          // below. Disabling Firebase's Apple presentation prevents duplicates.
+          alert: false,
+          badge: false,
+          sound: false,
         );
 
     final launchDetails = await _localNotifications
@@ -181,13 +221,7 @@ class FcmNotificationService {
     _foregroundSubscription = FirebaseMessaging.onMessage.listen((message) {
       _logRemoteMessage('Foreground message received', message);
       _refreshFcmRelatedData();
-      if (_shouldShowForegroundLocalNotification(message)) {
-        unawaited(_showLocalNotification(message));
-      } else {
-        _logFcm(
-          'Foreground local notification skipped: OS will present notification payload',
-        );
-      }
+      unawaited(_showLocalNotification(message));
     });
 
     _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
@@ -199,6 +233,22 @@ class FcmNotificationService {
   void dispose() {
     unawaited(_foregroundSubscription?.cancel());
     unawaited(_openedSubscription?.cancel());
+    _lifecycleListener?.dispose();
+  }
+
+  void _handleAppResumed() {
+    final now = DateTime.now();
+    if (!shouldRefreshOnResume(now: now, lastRefreshAt: _lastResumeRefreshAt)) {
+      _logFcm('App resumed; refresh skipped (throttled)');
+      return;
+    }
+    _logFcm('App resumed; refreshing FCM-backed data');
+    _refreshFcmRelatedData();
+    // Second chance for a device whose token never arrived: iOS can hand APNs
+    // over long after startup, and nothing else retries once the bootstrap
+    // attempt gave up. A token found here reaches the backend through
+    // fcmTokenSyncProvider, which is listening on currentFcmTokenProvider.
+    unawaited(ensurePushToken(_ref));
   }
 
   void _handleNotificationOpened(RemoteMessage message) {
@@ -220,7 +270,18 @@ class FcmNotificationService {
   void _refreshFcmRelatedData() {
     _logFcm('Refreshing notificationsProvider');
     _logFcm('Refreshing homeParcelsProvider');
+    // Opening the app from a notification also fires onResume moments later;
+    // stamping the clock here keeps that from refetching everything twice.
+    _lastResumeRefreshAt = DateTime.now();
     refreshFcmRelatedProviders(_ref.invalidate);
+    // This reloads the same branch's data, so the screens keep what they are
+    // already showing instead of blanking out to a spinner.
+    unawaited(
+      runInPlaceRefresh(
+        _ref.read(inPlaceRefreshCountProvider.notifier),
+        _ref.read(parcelStatusProvider.future),
+      ),
+    );
   }
 }
 
@@ -270,13 +331,19 @@ Future<void> _showLocalNotification(RemoteMessage message) async {
       ),
       iOS: const DarwinNotificationDetails(
         presentAlert: true,
+        presentBanner: true,
+        presentList: true,
         presentBadge: true,
         presentSound: true,
+        interruptionLevel: InterruptionLevel.timeSensitive,
       ),
       macOS: const DarwinNotificationDetails(
         presentAlert: true,
+        presentBanner: true,
+        presentList: true,
         presentBadge: true,
         presentSound: true,
+        interruptionLevel: InterruptionLevel.timeSensitive,
       ),
     ),
     payload: jsonEncode(message.data),
@@ -291,20 +358,6 @@ Future<void> _handleLocalNotificationResponse(
     'Local notification tapped actionId=${response.actionId} payload=$data',
   );
   _localNotificationOpenHandler?.call(data);
-}
-
-bool _shouldShowForegroundLocalNotification(RemoteMessage message) {
-  if (kIsWeb) {
-    return false;
-  }
-
-  final isApplePlatform =
-      defaultTargetPlatform == TargetPlatform.iOS ||
-      defaultTargetPlatform == TargetPlatform.macOS;
-  if (isApplePlatform && message.notification != null) {
-    return false;
-  }
-  return true;
 }
 
 Map<String, dynamic> _decodeNotificationPayload(String? payload) {

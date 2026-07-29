@@ -36,11 +36,17 @@ const Map<String, dynamic> kTestTranslations = {
       "We couldn't find your phone number. Please sign in again",
   'parcel_claim_total_label': '{} parcels found',
   'parcel_claim_empty': 'No unowned parcels found',
+  'parcel_claim_search_prompt':
+      'Enter the full tracking number to find your parcel',
   'parcel_claim_page_label': 'Page {} of {}',
   'parcel_claim_selected_count': '{} selected',
   'parcel_claim_selected_title': 'Selected parcels',
   'parcel_claim_clear_selection': 'Clear all',
   'parcel_claim_submit_button': 'Confirm these parcels are mine',
+  'parcel_claim_confirm_title': 'Confirm claim',
+  'parcel_claim_confirm_message': 'Submit a claim for {} parcel(s)?',
+  'parcel_claim_confirm_action': 'Confirm',
+  'common_cancel': 'Cancel',
   'parcel_claim_submit_success':
       'Claim request submitted. Please wait for admin approval',
   'parcel_claim_load_error': 'Failed to load unowned parcels',

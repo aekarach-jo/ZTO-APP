@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/config/app_env.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../parcel_status/data/parcel_status_repository.dart';
+import '../../../parcel_status/application/parcel_status_tab_provider.dart';
 import '../../../parcel_status/presentation/screens/parcel_status_screen.dart';
 import '../../data/profile_repository.dart';
 import 'edit_profile_screen.dart';
@@ -21,7 +21,6 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
-    final statusAsync = ref.watch(parcelStatusProvider);
     final profileAsync = ref.watch(userProfileProvider);
     final profile = profileAsync.valueOrNull;
     final loadingProfile = profileAsync.isLoading && profile == null;
@@ -43,9 +42,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               : 'profile_email_placeholder'.tr());
 
     return RefreshIndicator(
+      // Pull-to-refresh reloads the header plus whichever tab is on screen, so
+      // dragging on the orders tab refetches the orders rather than the parcel
+      // page it used to reload unconditionally.
       onRefresh: () {
         ref.invalidate(userProfileProvider);
-        return ref.refresh(parcelStatusProvider.future);
+        return refreshParcelStatusTab(ref, ref.read(parcelStatusTabProvider));
       },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -129,85 +131,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
           SizedBox(height: 16.h),
-          statusAsync.when(
-            // Show the spinner while refetching (e.g. after a branch switch)
-            // instead of holding the previous branch's data on screen.
-            skipLoadingOnRefresh: false,
-            data: (page) => Padding(
-              padding: EdgeInsets.symmetric(horizontal: 14.w),
-              child: ParcelStatusSection(
-                page: page,
-                summaryKeyPrefix: 'profile-summary',
-              ),
-            ),
-            loading: () => Padding(
-              padding: EdgeInsets.only(top: 18.h),
-              child: const Center(child: CircularProgressIndicator()),
-            ),
-            error: (error, stackTrace) => Padding(
-              padding: EdgeInsets.all(16.w),
-              child: _SimpleStateCard(
-                message: _ProfileTextKeys.loadError,
-                actionLabel: _ProfileTextKeys.retry,
-                onAction: () => ref.invalidate(parcelStatusProvider),
-              ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14.w),
+            // The section owns its own loading, error and retry states so the
+            // summary cards can stay put while a tab reloads.
+            child: const ParcelStatusSection(
+              summaryKeyPrefix: 'profile-summary',
             ),
           ),
         ],
       ),
     );
   }
-}
-
-class _SimpleStateCard extends StatelessWidget {
-  const _SimpleStateCard({
-    required this.message,
-    this.actionLabel,
-    this.onAction,
-  });
-
-  final String message;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 18.h),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18.r),
-        border: Border.all(color: const Color(0xFFE2E8F1)),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.inventory_2_outlined,
-            color: const Color(0xFFA2AFBF),
-            size: 24.sp,
-          ),
-          SizedBox(height: 8.h),
-          Text(
-            message.tr(),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: const Color(0xFF768499),
-              fontSize: 14.sp,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          if (actionLabel != null && onAction != null) ...[
-            SizedBox(height: 8.h),
-            TextButton(onPressed: onAction, child: Text(actionLabel!.tr())),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileTextKeys {
-  static const String loadError = 'profile_load_error';
-  static const String retry = 'common_retry';
 }

@@ -16,6 +16,7 @@ Future<void> main() async {
   await EasyLocalization.ensureInitialized();
   await loadAppEnv();
   await configureFcmBackgroundHandler();
+  await configureLocalNotifications();
 
   runApp(
     ProviderScope(

@@ -55,6 +55,45 @@ Widget _buildTestApp(Widget child) {
   );
 }
 
+/// Opens the delivery-branch dropdown and picks ອານຸສິດ. The option exists twice
+/// once the menu is open — in the closed field and in the overlay — so tap the
+/// last one.
+Future<void> _selectDeliveryBranch(WidgetTester tester) async {
+  await tester.scrollUntilVisible(
+    find.byKey(const ValueKey('send-input-branch')),
+    200,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('send-input-branch')));
+  await tester.pumpAndSettle();
+  await tester.tap(
+    find.byKey(const ValueKey('send-branch-option-ອານຸສິດ')).last,
+  );
+  await tester.pumpAndSettle();
+}
+
+/// Picks the first parcel and moves on to the recipient-details step.
+Future<void> _openRecipientStep(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('send-item-TH88291039')));
+  await tester.pumpAndSettle();
+
+  await tester.scrollUntilVisible(
+    find.byKey(const ValueKey('send-next-button')),
+    200,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+
+  await tester.tap(
+    find.descendant(
+      of: find.byKey(const ValueKey('send-next-button')),
+      matching: find.byType(ElevatedButton),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -126,6 +165,56 @@ void main() {
     },
   );
 
+  testWidgets('recipient phone keeps only the digits after +856 20', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_buildTestApp(const SendScreen()));
+    await tester.pumpAndSettle();
+    await _openRecipientStep(tester);
+
+    final phoneField = find.descendant(
+      of: find.byKey(const ValueKey('send-input-recipient-phone')),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(phoneField, 'abc 99-88-77-66 xyz');
+    await tester.pumpAndSettle();
+
+    expect(find.text('+856 20 '), findsOneWidget);
+    expect(tester.widget<TextField>(phoneField).controller?.text, '99887766');
+  });
+
+  testWidgets('delivery branch offers the Lao branch names', (tester) async {
+    await tester.pumpWidget(_buildTestApp(const SendScreen()));
+    await tester.pumpAndSettle();
+    await _openRecipientStep(tester);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('send-input-branch')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('send-input-branch')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('send-branch-option-ອານຸສິດ')),
+      findsWidgets,
+    );
+    expect(
+      find.byKey(const ValueKey('send-branch-option-ມີໄຊ')),
+      findsWidgets,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('send-branch-option-ມີໄຊ')).last,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('ມີໄຊ'), findsOneWidget);
+  });
+
   testWidgets('enables pin-address button when recipient form is complete', (
     tester,
   ) async {
@@ -182,11 +271,7 @@ void main() {
       'Flash',
     );
 
-    await tester.enterText(
-      find.byKey(const ValueKey('send-input-branch')),
-      'VTE-01',
-    );
-    await tester.pumpAndSettle();
+    await _selectDeliveryBranch(tester);
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('send-pin-map-button')),
@@ -246,11 +331,7 @@ void main() {
       find.byKey(const ValueKey('send-input-courier')),
       'Flash',
     );
-    await tester.enterText(
-      find.byKey(const ValueKey('send-input-branch')),
-      'VTE-01',
-    );
-    await tester.pumpAndSettle();
+    await _selectDeliveryBranch(tester);
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('send-pin-map-button')),
@@ -316,11 +397,7 @@ void main() {
       find.byKey(const ValueKey('send-input-courier')),
       'Flash',
     );
-    await tester.enterText(
-      find.byKey(const ValueKey('send-input-branch')),
-      'VTE-01',
-    );
-    await tester.pumpAndSettle();
+    await _selectDeliveryBranch(tester);
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('send-pin-map-button')),

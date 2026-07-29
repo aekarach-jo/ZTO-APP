@@ -23,11 +23,15 @@ class PickupPaymentParcel {
     required this.parcelId,
     required this.title,
     required this.amount,
+    this.trackingNo,
   });
 
   final String parcelId;
   final String title;
   final int amount;
+
+  /// Tracking number printed on the receipt.
+  final String? trackingNo;
 }
 
 /// Arguments passed to [ParcelPaymentScreen] via GoRouter `extra`.
@@ -41,18 +45,23 @@ class ParcelPaymentArgs {
   const ParcelPaymentArgs.pickup({required this.parcels})
     : existingOrder = null,
       itemName = null,
-      amountOverride = null;
+      amountOverride = null,
+      trackingNo = null;
 
   const ParcelPaymentArgs.forOrder({
     required ParcelOrder order,
     this.itemName,
     this.amountOverride,
+    this.trackingNo,
   })  : existingOrder = order,
         parcels = const [];
 
   final List<PickupPaymentParcel> parcels;
   final ParcelOrder? existingOrder;
   final String? itemName;
+
+  /// Tracking number of the parcel being paid for (existing-order flows).
+  final String? trackingNo;
 
   /// Amount to display/charge instead of `existingOrder.amount`. Used by the
   /// forward flow, where the customer pays only the shipping fee (computed
@@ -74,13 +83,21 @@ class ParcelPaymentScreen extends ConsumerStatefulWidget {
 
 enum _PaymentPhase { review, qr, success }
 
+/// Progress of the automatic receipt-image save on the success step.
+enum _ReceiptSaveState { idle, saving, saved, failed }
+
 /// One line in the payment summary (a single parcel). Amounts shown before the
 /// order is created are previews; the charged total comes from the order.
 class _PaymentLine {
-  const _PaymentLine({required this.title, required this.amount});
+  const _PaymentLine({
+    required this.title,
+    required this.amount,
+    this.trackingNo,
+  });
 
   final String title;
   final int amount;
+  final String? trackingNo;
 }
 
 class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
@@ -115,6 +132,16 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
   /// Captures the rendered QR card so it can be saved to the gallery.
   final GlobalKey _qrBoundaryKey = GlobalKey();
   bool _savingQr = false;
+
+  /// Receipt data resolved when the payment settles. [_billNo] / [_paymentNo]
+  /// stay null until the backend sends them; the receipt hides those rows.
+  String? _billNo;
+  String? _paymentNo;
+  DateTime? _paidAt;
+
+  /// Captures the whole receipt so it can be auto-saved to the gallery.
+  final GlobalKey _receiptBoundaryKey = GlobalKey();
+  _ReceiptSaveState _receiptSaveState = _ReceiptSaveState.idle;
 
   @override
   void initState() {

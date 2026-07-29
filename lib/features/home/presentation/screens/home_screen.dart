@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/refresh/in_place_refresh.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/home_parcel_repository.dart';
 import '../../../main_layout/application/main_layout_navigation_provider.dart';
@@ -31,10 +32,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final parcelsAsync = ref.watch(homeParcelsProvider);
+    final inPlaceRefresh = ref.watch(isRefreshingInPlaceProvider);
     final query = _searchController.text.trim().toLowerCase();
 
     return RefreshIndicator(
-      onRefresh: () => ref.refresh(homeParcelsProvider.future),
+      onRefresh: () => runInPlaceRefresh(
+        ref.read(inPlaceRefreshCountProvider.notifier),
+        ref.refresh(homeParcelsProvider.future),
+      ),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 20.h),
@@ -59,9 +64,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           SizedBox(height: 14.h),
           parcelsAsync.when(
-            // Show the spinner while refetching (e.g. after a branch switch)
-            // instead of holding the previous branch's parcels on screen.
-            skipLoadingOnRefresh: false,
+            // Reloads of the same list — pull-to-refresh, an arriving push,
+            // coming back to the app — keep the parcels on screen. Anything
+            // else swaps in a different list (a branch switch), so show the
+            // spinner instead of holding the previous branch's parcels.
+            skipLoadingOnRefresh: inPlaceRefresh,
             data: (apiParcels) {
               final parcels = apiParcels
                   .map(_ParcelItem.fromApi)

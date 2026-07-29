@@ -54,6 +54,8 @@ class FirebasePushTokenService implements PushTokenService {
         await _waitForApplePushToken();
       }
 
+      await FirebaseMessaging.instance.deleteToken(); // ลบ token เก่า
+
       for (var attempt = 1; attempt <= _fcmTokenRetryAttempts; attempt++) {
         final token = await FirebaseMessaging.instance.getToken();
         _logPushToken(
@@ -111,6 +113,30 @@ class FirebasePushTokenService implements PushTokenService {
 final pushTokenServiceProvider = Provider<PushTokenService>((ref) {
   return const FirebasePushTokenService();
 });
+
+/// Returns the device token, fetching one when the app does not have it yet.
+///
+/// The bootstrap attempt can legitimately come back empty on iOS: APNs
+/// registration is slower there than on Android and can outlast the retry
+/// window, and [initializeAndGetToken] gives up for the rest of the session
+/// once that happens. Login and app resume both call this so a device that lost
+/// the first race still ends up registered with the backend.
+Future<String?> ensurePushToken(Ref ref) async {
+  final existing = ref.read(currentFcmTokenProvider);
+  if (existing != null && existing.isNotEmpty) {
+    return existing;
+  }
+
+  final token = await ref
+      .read(pushTokenServiceProvider)
+      .initializeAndGetToken();
+  if (token == null || token.isEmpty) {
+    return null;
+  }
+
+  ref.read(currentFcmTokenProvider.notifier).state = token;
+  return token;
+}
 
 final pushTokenBootstrapProvider = FutureProvider<void>((ref) async {
   final service = ref.watch(pushTokenServiceProvider);
