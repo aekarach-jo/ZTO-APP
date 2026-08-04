@@ -114,13 +114,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  /// Forward reuses the Send flow: pre-select the parcel then jump to the
-  /// Send tab, landing directly on the recipient-details step.
+  /// Forward reuses the Send flow: pre-select the parcels then jump to the
+  /// Send tab, landing directly on the recipient-details step. The group
+  /// button forwards the whole day's batch, not just the first parcel.
   void _startForward(List<_ParcelItem> items) {
     if (items.isEmpty) {
       return;
     }
-    ref.read(sendForwardPrefillProvider.notifier).state = items.first.id;
+    ref.read(sendForwardPrefillProvider.notifier).state = [
+      for (final item in items) item.id,
+    ];
     ref.read(customerTabJumpTargetProvider.notifier).state = 1;
   }
 
@@ -131,7 +134,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (items.isEmpty) {
       return;
     }
-    final result = await context.push(
+    await context.push(
       ParcelPaymentScreen.routePath,
       extra: ParcelPaymentArgs.pickup(
         parcels: [
@@ -140,11 +143,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               parcelId: item.id,
               title: item.title,
               amount: item.price ?? 0,
+              trackingNo: item.trackNo,
             ),
         ],
       ),
     );
-    if (result == true && mounted) {
+    // Refresh whether or not the payment succeeded: a paid/pending order hides
+    // its parcels from `GET /parcels`, and an expired (failed) order brings
+    // them back, so a stale list is wrong in both directions.
+    if (mounted) {
       ref.invalidate(homeParcelsProvider);
       ref.invalidate(parcelStatusProvider);
     }

@@ -18,8 +18,10 @@ import '../../../home/presentation/screens/home_screen.dart';
 import '../../../notifications/data/notification_repository.dart';
 import '../../../parcel_status/data/parcel_status_repository.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
+import '../../../profile/application/user_language_sync.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../send/data/send_repository.dart';
+import '../../../../shared/widgets/privacy_policy_sheet.dart';
 import '../../../send/presentation/screens/send_screen.dart';
 import '../../../staff/presentation/screens/staff_receive_screen.dart';
 import '../../../staff/presentation/screens/staff_scan_pay_screen.dart';
@@ -38,6 +40,24 @@ class MainLayoutScreen extends ConsumerStatefulWidget {
 class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
   int _customerTabIndex = 0;
   int _staffTabIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // First frame after sign-in: make sure the backend knows which language to
+    // compose push notifications in.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(
+        reconcileUserLanguage(
+          context,
+          ProviderScope.containerOf(context, listen: false),
+        ),
+      );
+    });
+  }
 
   List<Widget> get _customerTabs => [
     HomeScreen(),
@@ -358,6 +378,10 @@ class _MainTopBar extends ConsumerWidget {
                     onSwitchRole();
                     return;
                   }
+                  if (action == _TopBarMenuAction.privacyPolicy) {
+                    showPrivacyPolicySheet(context);
+                    return;
+                  }
                   onLogout();
                 },
                 itemBuilder: (context) => [
@@ -393,6 +417,13 @@ class _MainTopBar extends ConsumerWidget {
                         ),
                       ],
                     ),
+                  ),
+                  // Play reviewers look for the policy link inside the signed-in
+                  // app, not only on the auth screens.
+                  PopupMenuItem<_TopBarMenuAction>(
+                    key: const ValueKey('topbar-menu-privacy-policy'),
+                    value: _TopBarMenuAction.privacyPolicy,
+                    child: Text('privacy_policy_title'.tr()),
                   ),
                   PopupMenuItem<_TopBarMenuAction>(
                     key: const ValueKey('topbar-menu-logout'),
@@ -433,7 +464,13 @@ class _LanguageFlagButton extends StatelessWidget {
       isSelected: selected,
       selectedIcon: Text(flag, style: const TextStyle(fontSize: 24)),
       onPressed: () {
-        unawaited(context.setLocale(locale));
+        // Keep the backend language in step so pushes match the new UI language.
+        final container = ProviderScope.containerOf(context, listen: false);
+        unawaited(
+          context.setLocale(locale).then(
+            (_) => pushUserLanguage(container, locale.languageCode),
+          ),
+        );
         Navigator.of(context).pop();
       },
       icon: Text(flag, style: const TextStyle(fontSize: 24)),
@@ -489,31 +526,50 @@ class _BranchMenuItem extends ConsumerWidget {
   }
 
   void _selectBranch(BuildContext context, Branch branch) {
-    // Capture the app-level container before the menu (and this widget) closes.
+    // Capture the app-level container and the messenger before the menu (and
+    // this widget) closes.
     final container = ProviderScope.containerOf(context);
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
-    unawaited(_applySelection(container, branch));
+    unawaited(_applySelection(container, messenger, branch));
   }
 
   Future<void> _applySelection(
     ProviderContainer container,
+    ScaffoldMessengerState messenger,
     Branch branch,
   ) async {
+    final branchCodeStore = container.read(branchCodeStoreProvider);
+    final previousCode = await branchCodeStore.read();
+
     // Point every subsequent request at the chosen branch FIRST. The
     // `x-branch-code` header is what NestJS routes on, so once it is set the
     // PATCH below and all data refetches hit the correct backend.
     if (branch.code.isNotEmpty) {
-      await container.read(branchCodeStoreProvider).save(branch.code);
+      await branchCodeStore.save(branch.code);
       container.invalidate(selectedBranchCodeProvider);
     }
 
-    // Best-effort: keep the server-side user record in sync too. Routing no
-    // longer depends on this succeeding, so a failure here must not block the
-    // refetch — the header alone already selects the branch.
+    // The server now creates orders against the user's active branch
+    // (`users.branchId`), not the header. If this PATCH fails the list would
+    // show one branch's parcels while orders are created in another — which
+    // surfaces as "parcel not found" — so roll the header back to the branch
+    // the server still holds instead of leaving the two out of sync.
     try {
       await container.read(branchRepositoryProvider).selectBranch(branch.id);
     } catch (_) {
       // BranchRepository already logged the real cause (status/body).
+      if (branch.code.isNotEmpty) {
+        if (previousCode != null && previousCode.isNotEmpty) {
+          await branchCodeStore.save(previousCode);
+        } else {
+          await branchCodeStore.clear();
+        }
+        container.invalidate(selectedBranchCodeProvider);
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('branch_switch_failed'.tr())),
+      );
     }
 
     // Parcels/orders are a different set per branch, so drop every
@@ -564,7 +620,7 @@ class _BranchChip extends StatelessWidget {
   }
 }
 
-enum _TopBarMenuAction { switchRole, logout }
+enum _TopBarMenuAction { switchRole, privacyPolicy, logout }
 
 class _PlaceholderTab extends StatelessWidget {
   const _PlaceholderTab({required this.titleKey});

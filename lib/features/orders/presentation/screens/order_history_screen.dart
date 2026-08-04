@@ -131,6 +131,21 @@ class OrderHistoryCard extends StatelessWidget {
               ),
             ),
           ],
+          if (order.billNo != null || order.paymentNo != null) ...[
+            SizedBox(height: 10.h),
+            if (order.billNo != null)
+              _ReceiptRefRow(
+                label: 'pickup_payment_receipt_bill_no'.tr(),
+                value: order.billNo!,
+              ),
+            if (order.paymentNo != null) ...[
+              SizedBox(height: 4.h),
+              _ReceiptRefRow(
+                label: 'pickup_payment_receipt_payment_no'.tr(),
+                value: order.paymentNo!,
+              ),
+            ],
+          ],
           SizedBox(height: 12.h),
           Divider(height: 1, color: const Color(0xFFE8EEF6)),
           SizedBox(height: 12.h),
@@ -170,6 +185,40 @@ class OrderHistoryCard extends StatelessWidget {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${local.day}/${local.month}/${local.year} '
         '${two(local.hour)}:${two(local.minute)}';
+  }
+}
+
+/// Label/value pair for the receipt numbers on an order card.
+class _ReceiptRefRow extends StatelessWidget {
+  const _ReceiptRefRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: const Color(0xFF9AA7B8),
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: const Color(0xFF6E7D92),
+            fontSize: 12.sp,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
   }
 }
 

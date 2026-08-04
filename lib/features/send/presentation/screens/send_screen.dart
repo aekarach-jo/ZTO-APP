@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -18,6 +19,7 @@ import '../../../main_layout/application/main_layout_navigation_provider.dart';
 import '../../../parcel_payment/data/payment_repository.dart';
 import '../../../parcel_payment/presentation/screens/parcel_payment_screen.dart';
 import '../../../parcel_status/data/parcel_status_repository.dart';
+import '../../../profile/data/address_repository.dart';
 
 class SendScreen extends ConsumerStatefulWidget {
   const SendScreen({super.key});
@@ -27,7 +29,9 @@ class SendScreen extends ConsumerStatefulWidget {
 }
 
 class _SendScreenState extends ConsumerState<SendScreen> {
-  String? _selectedParcelId;
+  /// Parcels picked for this forward batch. They all share one recipient and
+  /// one order — the fee is quoted per parcel and summed.
+  final Set<String> _selectedParcelIds = <String>{};
   _SendStep _step = _SendStep.selectParcel;
   bool _isSubmitting = false;
 
@@ -36,7 +40,25 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   final _recipientAddressController = TextEditingController();
   final _courierController = TextEditingController();
   String? _selectedBranch;
-  LatLng _pinLocation = const LatLng(17.9757, 102.6331);
+
+  /// Vientiane — where the pin starts before (or instead of) a device fix.
+  static const LatLng _fallbackPinLocation = LatLng(17.9757, 102.6331);
+  LatLng _pinLocation = _fallbackPinLocation;
+  GoogleMapController? _mapController;
+
+  /// The device fix is fetched once per flow, and only until the customer
+  /// moves the pin themselves — after that their choice wins.
+  bool _hasMovedPinManually = false;
+  bool _isLocatingDevice = false;
+
+  /// True once the pin sits on a real target (saved address or device fix)
+  /// rather than the Vientiane fallback — a saved address can be Vientiane
+  /// itself, so comparing coordinates is not enough to tell the two apart.
+  bool _hasPinTarget = false;
+
+  /// The recipient step is prefilled once per flow. Re-running it on every
+  /// visit would wipe edits made after the first pass.
+  bool _hasPrefilledRecipient = false;
 
   /// The branches parcels can be delivered to.
   static const List<String> _deliveryBranches = [
@@ -70,8 +92,109 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         subscriberDigits.length >= 6;
   }
 
+  bool get _isWidgetTest => const bool.fromEnvironment('FLUTTER_TEST');
+
+  bool get _isUnsupportedDesktop =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux);
+
+  /// Prefills the recipient step: the address comes from the parcel the admin
+  /// imported, everything else from the customer's default address book entry.
+  /// Only untouched fields are filled, so anything already typed survives.
+  void _prefillRecipientDetails(List<SendParcelItem> selectedItems) {
+    if (_hasPrefilledRecipient) {
+      return;
+    }
+    _hasPrefilledRecipient = true;
+
+    // One order carries one recipient, so a batch prefills from its first
+    // parcel; the customer can still correct the address by hand.
+    final parcelAddress = selectedItems
+        .map((item) => item.address)
+        .firstWhere((address) => address.isNotEmpty, orElse: () => '');
+    if (parcelAddress.isNotEmpty && _recipientAddressController.text.isEmpty) {
+      _recipientAddressController.text = parcelAddress;
+    }
+
+    final defaultAddress = ref.read(defaultUserAddressProvider);
+    if (defaultAddress == null) {
+      return;
+    }
+
+    if (_recipientNameController.text.isEmpty) {
+      _recipientNameController.text = defaultAddress.label;
+    }
+    if (_recipientPhoneController.text.isEmpty) {
+      _recipientPhoneController.text = laoSubscriberDigitsOf(
+        defaultAddress.phone,
+      );
+    }
+    if (_recipientAddressController.text.isEmpty) {
+      _recipientAddressController.text = defaultAddress.addressLine;
+    }
+    if (!_hasMovedPinManually &&
+        (defaultAddress.latitude != 0 || defaultAddress.longitude != 0)) {
+      _pinLocation = LatLng(defaultAddress.latitude, defaultAddress.longitude);
+      _hasPinTarget = true;
+    }
+  }
+
+  /// Starts the recipient pin on the device's own position. Anything that can
+  /// fail here — services off, permission refused, no fix in time — just leaves
+  /// the Vientiane fallback in place; pinning by hand still works.
+  ///
+  /// A saved default address outranks the device: the customer picked it as
+  /// where their parcels go, which is rarely where they are standing.
+  Future<void> _movePinToDeviceLocation() async {
+    if (_isLocatingDevice ||
+        _hasMovedPinManually ||
+        _hasPinTarget ||
+        _isWidgetTest ||
+        _isUnsupportedDesktop) {
+      return;
+    }
+    _isLocatingDevice = true;
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      if (!mounted || _hasMovedPinManually || _hasPinTarget) {
+        return;
+      }
+      final target = LatLng(position.latitude, position.longitude);
+      setState(() {
+        _pinLocation = target;
+        _hasPinTarget = true;
+      });
+      await _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(target, 16),
+      );
+    } catch (_) {
+      // Keep the fallback pin.
+    } finally {
+      _isLocatingDevice = false;
+    }
+  }
+
   @override
   void dispose() {
+    _mapController?.dispose();
     _recipientNameController.dispose();
     _recipientPhoneController.dispose();
     _recipientAddressController.dispose();
@@ -83,18 +206,22 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   Widget build(BuildContext context) {
     final parcelsAsync = ref.watch(sendParcelsProvider);
 
-    // Forward tapped in the Parcel tab: pre-select that parcel and jump
+    // Forward tapped in the Parcel tab: pre-select those parcels and jump
     // straight to the recipient-details step.
-    ref.listen<String?>(sendForwardPrefillProvider, (previous, next) {
-      if (next == null) {
+    ref.listen<List<String>?>(sendForwardPrefillProvider, (previous, next) {
+      if (next == null || next.isEmpty) {
         return;
       }
       ref.read(sendForwardPrefillProvider.notifier).state = null;
       setState(() {
         _resetFlow();
-        _selectedParcelId = next;
+        _selectedParcelIds.addAll(next);
         _step = _SendStep.recipientDetails;
       });
+      // The Send list may be stale (or have failed) since it was last fetched,
+      // and the ids only resolve against it. Refetch so the batch shows up
+      // instead of falling through to "select a parcel again".
+      ref.invalidate(sendParcelsProvider);
     });
 
     return _step == _SendStep.selectParcel
@@ -110,7 +237,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     BuildContext context,
     AsyncValue<List<SendParcelItem>> parcelsAsync,
   ) {
-    final hasSelection = _selectedParcelId != null;
+    final hasSelection = _selectedParcelIds.isNotEmpty;
 
     return _buildRefreshableListView(
       key: const ValueKey('send-select-step'),
@@ -118,7 +245,14 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       children: [
         _Header(
           title: _SendTextKeys.title.tr(),
-          onBack: () => _showNotImplementedSnack(context),
+          // First step of the flow — back means "leave Send", i.e. return to
+          // the Parcel tab the customer came from.
+          onBack: () {
+            setState(() {
+              _resetFlow();
+            });
+            ref.read(customerTabJumpTargetProvider.notifier).state = 0;
+          },
           backTooltip: _SendTextKeys.backTooltip.tr(),
         ),
         SizedBox(height: 12.h),
@@ -139,17 +273,41 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                 message: _SendTextKeys.emptySelectableParcels,
               );
             }
+            final allSelected = items.every(
+              (item) => _selectedParcelIds.contains(item.id),
+            );
             return Column(
               children: [
+                _SelectAllRow(
+                  key: const ValueKey('send-select-all'),
+                  selected: allSelected,
+                  count: _selectedParcelIds.length,
+                  onTap: () {
+                    setState(() {
+                      _selectedParcelIds.clear();
+                      if (!allSelected) {
+                        _selectedParcelIds.addAll(items.map((item) => item.id));
+                      }
+                      _createdOrder = null;
+                      // A different batch carries a different imported
+                      // address, so let the recipient step fill again.
+                      _hasPrefilledRecipient = false;
+                    });
+                  },
+                ),
+                SizedBox(height: 12.h),
                 for (var i = 0; i < items.length; i++) ...[
                   _SendParcelCard(
                     key: ValueKey('send-item-${items[i].id}'),
                     item: items[i],
-                    selected: _selectedParcelId == items[i].id,
+                    selected: _selectedParcelIds.contains(items[i].id),
                     onTap: () {
                       setState(() {
-                        _selectedParcelId = items[i].id;
+                        if (!_selectedParcelIds.remove(items[i].id)) {
+                          _selectedParcelIds.add(items[i].id);
+                        }
                         _createdOrder = null;
+                        _hasPrefilledRecipient = false;
                       });
                     },
                   ),
@@ -185,9 +343,16 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     BuildContext context,
     AsyncValue<List<SendParcelItem>> parcelsAsync,
   ) {
-    final selectedItem = _selectedParcel(parcelsAsync);
-    if (selectedItem == null) {
-      return _buildInvalidSelectionState();
+    final selectedItems = _selectedParcels(parcelsAsync);
+    if (selectedItems.isEmpty) {
+      return _buildUnresolvedSelectionState(parcelsAsync);
+    }
+
+    // Prefilling needs the address book, so it waits for that request to settle
+    // — watching it here rebuilds this step once it does. A failed book still
+    // prefills, just with the parcel's own address only.
+    if (!ref.watch(userAddressesProvider).isLoading) {
+      _prefillRecipientDetails(selectedItems);
     }
 
     return _buildRefreshableListView(
@@ -204,7 +369,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
           backTooltip: _SendTextKeys.backTooltip.tr(),
         ),
         SizedBox(height: 12.h),
-        _SelectedParcelSummary(item: selectedItem),
+        _SelectedParcelSummary(items: selectedItems),
         SizedBox(height: 16.h),
         _InputLabel(text: _SendTextKeys.recipientNameLabel.tr()),
         _InputField(
@@ -283,6 +448,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
             setState(() {
               _step = _SendStep.pinAddress;
             });
+            _movePinToDeviceLocation();
           },
         ),
       ],
@@ -293,16 +459,12 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     BuildContext context,
     AsyncValue<List<SendParcelItem>> parcelsAsync,
   ) {
-    final selectedItem = _selectedParcel(parcelsAsync);
-    if (selectedItem == null) {
-      return _buildInvalidSelectionState();
+    final selectedItems = _selectedParcels(parcelsAsync);
+    if (selectedItems.isEmpty) {
+      return _buildUnresolvedSelectionState(parcelsAsync);
     }
-    final isWidgetTest = const bool.fromEnvironment('FLUTTER_TEST');
-    final isUnsupportedDesktop =
-        !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.windows ||
-            defaultTargetPlatform == TargetPlatform.linux);
+    final isWidgetTest = _isWidgetTest;
+    final isUnsupportedDesktop = _isUnsupportedDesktop;
 
     return _buildRefreshableListView(
       key: const ValueKey('send-pin-step'),
@@ -348,8 +510,21 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                               position: _pinLocation,
                             ),
                           },
+                          onMapCreated: (controller) {
+                            _mapController = controller;
+                            // The saved address or device fix can land before
+                            // the map finishes creating, in which case there
+                            // was no controller to move the camera with yet.
+                            if (_hasPinTarget) {
+                              controller.animateCamera(
+                                CameraUpdate.newLatLngZoom(_pinLocation, 16),
+                              );
+                            }
+                          },
                           onTap: (latLng) {
                             setState(() {
+                              _hasMovedPinManually = true;
+                              _hasPinTarget = true;
                               _pinLocation = latLng;
                             });
                           },
@@ -420,7 +595,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
             children: [
               Text(
                 _SendTextKeys.pinCoordinateLabel.tr(
-                  args: [selectedItem.trackNo],
+                  args: [_parcelsLabel(selectedItems)],
                 ),
                 style: TextStyle(
                   color: const Color(0xFF8390A3),
@@ -459,12 +634,27 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     BuildContext context,
     AsyncValue<List<SendParcelItem>> parcelsAsync,
   ) {
-    final selectedItem = _selectedParcel(parcelsAsync);
-    if (selectedItem == null) {
-      return _buildInvalidSelectionState();
+    final selectedItems = _selectedParcels(parcelsAsync);
+    if (selectedItems.isEmpty) {
+      return _buildUnresolvedSelectionState(parcelsAsync);
     }
-    final weightKg = selectedItem.weightKg ?? 1.0;
-    final feeQuote = ForwardFeeQuote.fromWeight(weightKg);
+    final weightKg = selectedItems.fold<double>(
+      0,
+      (total, item) => total + (item.weightKg ?? 1.0),
+    );
+    // Forward shipping is calculated once from the combined weight of every
+    // parcel in the order, matching POST /orders/forward.
+    final feeQuote = ForwardFeeQuote.fromWeights(
+      selectedItems.map((item) => item.weightKg ?? 1.0),
+    );
+    // The customer pays the parcel price plus one shipping fee for the batch —
+    // the same breakdown POST /orders/forward returns in `amount`.
+    final priceTotal = selectedItems.fold<int>(
+      0,
+      (total, item) => total + (item.priceLak ?? 0),
+    );
+    final grandTotal = priceTotal + feeQuote.total;
+    final isBatch = selectedItems.length > 1;
 
     return _buildRefreshableListView(
       key: const ValueKey('send-summary-step'),
@@ -502,7 +692,11 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               ),
               SizedBox(height: 4.h),
               Text(
-                selectedItem.title,
+                isBatch
+                    ? _SendTextKeys.parcelCount.tr(
+                        args: ['${selectedItems.length}'],
+                      )
+                    : selectedItems.first.title,
                 style: TextStyle(
                   color: const Color(0xFF101010),
                   fontSize: 17.sp,
@@ -523,7 +717,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               SizedBox(height: 2.h),
               Text(
                 _SendTextKeys.paymentWeightBilled.tr(
-                  args: ['$weightKg', '${feeQuote.billableKg}'],
+                  args: [_formatWeight(weightKg), '${feeQuote.billableKg}'],
                 ),
                 style: TextStyle(
                   color: AppTheme.brandBlue,
@@ -534,9 +728,21 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               SizedBox(height: 12.h),
               Divider(height: 1, color: const Color(0xFFD8DFE9)),
               SizedBox(height: 12.h),
+              // Parcel prices are listed per tracking number; the shipping fee
+              // is charged once for the whole batch.
+              if (priceTotal > 0)
+                for (final item in selectedItems) ...[
+                  _PriceRow(
+                    label: item.trackNo,
+                    amount: formatLak(item.priceLak ?? 0),
+                    compact: true,
+                  ),
+                  SizedBox(height: 8.h),
+                ],
               _PriceRow(
                 label: _SendTextKeys.paymentFeeLabel.tr(),
                 amount: formatLak(feeQuote.fee),
+                compact: priceTotal > 0,
               ),
               SizedBox(height: 12.h),
               Divider(
@@ -547,7 +753,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               SizedBox(height: 12.h),
               _PriceRow(
                 label: _SendTextKeys.paymentTotalLabel.tr(),
-                amount: formatLak(feeQuote.total),
+                amount: formatLak(grandTotal),
                 highlight: true,
               ),
             ],
@@ -557,16 +763,53 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         _PrimaryActionButton(
           key: const ValueKey('send-confirm-forward-button'),
           label: _SendTextKeys.paymentConfirmButton.tr(
-            args: [formatLak(feeQuote.total)],
+            args: [formatLak(grandTotal)],
           ),
           enabled: !_isSubmitting,
-          onPressed: () => _handleForwardConfirm(selectedItem),
+          onPressed: () => _handleForwardConfirm(selectedItems),
         ),
       ],
     );
   }
 
-  Widget _buildInvalidSelectionState() {
+  /// Shown by every step past the first when the selection can't be resolved.
+  /// Loading and failed fetches are their own states — collapsing them into
+  /// "select a parcel again" makes a slow or broken `/parcels` call look like
+  /// the customer picked something invalid.
+  Widget _buildUnresolvedSelectionState(
+    AsyncValue<List<SendParcelItem>> parcelsAsync,
+  ) {
+    if (parcelsAsync.isLoading) {
+      return _buildRefreshableListView(
+        key: const ValueKey('send-resolving-selection-step'),
+        padding: EdgeInsets.fromLTRB(14.w, 40.h, 14.w, 20.h),
+        children: [const Center(child: CircularProgressIndicator())],
+      );
+    }
+
+    if (parcelsAsync.hasError) {
+      return _buildRefreshableListView(
+        key: const ValueKey('send-selection-error-step'),
+        padding: EdgeInsets.fromLTRB(14.w, 16.h, 14.w, 20.h),
+        children: [
+          _SimpleStateCard(
+            icon: Icons.error_outline,
+            message: _SendTextKeys.loadParcelsError,
+            actionLabel: _SendTextKeys.retry,
+            onAction: () => ref.invalidate(sendParcelsProvider),
+          ),
+        ],
+      );
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        '[SendScreen] forward selection unresolved: '
+        'selected=$_selectedParcelIds '
+        'available=${parcelsAsync.valueOrNull?.map((item) => item.id).toList()}',
+      );
+    }
+
     return _buildRefreshableListView(
       key: const ValueKey('send-invalid-selection-step'),
       padding: EdgeInsets.fromLTRB(14.w, 16.h, 14.w, 20.h),
@@ -578,7 +821,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
           onAction: () {
             setState(() {
               _step = _SendStep.selectParcel;
-              _selectedParcelId = null;
+              _selectedParcelIds.clear();
             });
           },
         ),
@@ -602,70 +845,110 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     );
   }
 
-  SendParcelItem? _selectedParcel(
+  /// Selected parcels in list order, so the summary and the payload keep the
+  /// same order the customer sees.
+  List<SendParcelItem> _selectedParcels(
     AsyncValue<List<SendParcelItem>> parcelsAsync,
   ) {
-    final selectedId = _selectedParcelId;
-    if (selectedId == null) {
-      return null;
+    if (_selectedParcelIds.isEmpty) {
+      return const [];
     }
     final items = parcelsAsync.valueOrNull;
     if (items == null) {
-      return null;
+      return const [];
     }
-    for (final item in items) {
-      if (item.id == selectedId) {
-        return item;
-      }
-    }
-    return null;
+    return [
+      for (final item in items)
+        if (_selectedParcelIds.contains(item.id)) item,
+    ];
   }
 
-  Future<void> _handleForwardConfirm(SendParcelItem selectedItem) async {
+  /// A single parcel reads better by tracking number; a batch by count.
+  String _parcelsLabel(List<SendParcelItem> items) {
+    return items.length == 1
+        ? items.first.trackNo
+        : _SendTextKeys.parcelCount.tr(args: ['${items.length}']);
+  }
+
+  static String _formatWeight(double weightKg) {
+    return weightKg == weightKg.roundToDouble()
+        ? weightKg.toStringAsFixed(0)
+        : weightKg.toStringAsFixed(2);
+  }
+
+  /// Creates the forward order. Called from the payment screen when the
+  /// customer actually pays, so browsing the summary never puts a parcel on
+  /// hold. The result is cached: backing out of the QR and paying again must
+  /// reuse the same order instead of creating a second one.
+  Future<ParcelOrder> _createForwardOrder(
+    List<SendParcelItem> selectedItems,
+  ) async {
+    final existing = _createdOrder;
+    if (existing != null) {
+      return existing;
+    }
+    final order = await ref.read(sendRepositoryProvider).createForwardOrder([
+      for (final item in selectedItems)
+        CreateForwardRequest(
+          parcelId: item.id,
+          recipientName: _recipientNameController.text.trim(),
+          recipientPhone: _recipientPhoneNumber,
+          recipientAddress: _recipientAddressController.text.trim(),
+          courierName: _courierController.text.trim(),
+          branchName: _selectedBranch ?? '',
+          latitude: _pinLocation.latitude,
+          longitude: _pinLocation.longitude,
+        ),
+    ]);
+    _createdOrder = order;
+    return order;
+  }
+
+  Future<void> _handleForwardConfirm(List<SendParcelItem> selectedItems) async {
     setState(() {
       _isSubmitting = true;
     });
 
-    // The customer pays only the shipping fee for forwarding, computed the same
-    // way as the summary card — not the parcel's own price.
-    final feeQuote = ForwardFeeQuote.fromWeight(selectedItem.weightKg ?? 1.0);
-
     try {
-      final order =
-          _createdOrder ??
-          await ref
-              .read(sendRepositoryProvider)
-              .createForwardRequest(
-                CreateForwardRequest(
-                  parcelId: selectedItem.id,
-                  recipientName: _recipientNameController.text.trim(),
-                  recipientPhone: _recipientPhoneNumber,
-                  recipientAddress: _recipientAddressController.text.trim(),
-                  courierName: _courierController.text.trim(),
-                  branchName: _selectedBranch ?? '',
-                  latitude: _pinLocation.latitude,
-                  longitude: _pinLocation.longitude,
-                ),
-              );
-      _createdOrder = order;
+      final feeQuote = ForwardFeeQuote.fromWeights(
+        selectedItems.map((item) => item.weightKg ?? 1.0),
+      );
+
+      final result = await context.push(
+        ParcelPaymentScreen.routePath,
+        extra: ParcelPaymentArgs.draft(
+          createOrder: () => _createForwardOrder(selectedItems),
+          itemName: selectedItems.first.title,
+          shippingFee: feeQuote.fee,
+          trackingNo: selectedItems.first.trackNo,
+          parcels: [
+            for (final item in selectedItems)
+              PickupPaymentParcel(
+                parcelId: item.id,
+                title: item.title,
+                amount: item.priceLak ?? 0,
+                trackingNo: item.trackNo,
+              ),
+          ],
+        ),
+      );
 
       if (!mounted) {
         return;
       }
-      setState(() {
-        _isSubmitting = false;
-      });
 
-      final result = await context.push(
-        ParcelPaymentScreen.routePath,
-        extra: ParcelPaymentArgs.forOrder(
-          order: order,
-          itemName: selectedItem.title,
-          amountOverride: feeQuote.total,
-        ),
-      );
-
-      if (!mounted || result != true) {
+      if (result != true) {
+        // Left without paying. If an order was created it expires after 10
+        // minutes on the backend and paying an expired order fails, so drop it
+        // and let a retry create a fresh one. The parcel lists change too
+        // (unpaid orders hide their parcels), so refresh them as well.
+        final hadOrder = _createdOrder != null;
+        _createdOrder = null;
+        if (hadOrder) {
+          ref.invalidate(sendParcelsProvider);
+          ref.invalidate(homeParcelsProvider);
+          ref.invalidate(parcelStatusProvider);
+        }
         return;
       }
 
@@ -681,8 +964,8 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       ref.invalidate(parcelStatusProvider);
       ref.read(customerTabJumpTargetProvider.notifier).state = 0;
     } catch (error, stackTrace) {
-      // Surface the real cause: a failed POST /orders/forward otherwise looks
-      // like the screen "did nothing" after tapping confirm.
+      // Surface the real cause: a failed hand-off to the payment screen
+      // otherwise looks like the screen "did nothing" after tapping confirm.
       if (kDebugMode) {
         debugPrint('[SendScreen] forward confirm failed: $error');
         debugPrint('$stackTrace');
@@ -690,31 +973,31 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _isSubmitting = false;
-      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_SendTextKeys.submitForwardError.tr())),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 
   void _resetFlow() {
-    _selectedParcelId = null;
+    _selectedParcelIds.clear();
     _step = _SendStep.selectParcel;
-    _pinLocation = const LatLng(17.9757, 102.6331);
+    _pinLocation = _fallbackPinLocation;
+    _hasMovedPinManually = false;
+    _hasPinTarget = false;
+    _hasPrefilledRecipient = false;
     _createdOrder = null;
     _recipientNameController.clear();
     _recipientPhoneController.clear();
     _recipientAddressController.clear();
     _courierController.clear();
     _selectedBranch = null;
-  }
-
-  void _showNotImplementedSnack(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_SendTextKeys.actionNotImplemented.tr())),
-    );
   }
 }
 
@@ -769,10 +1052,65 @@ class _SendParcelCard extends StatelessWidget {
               ),
             ),
             Icon(
-              selected ? Icons.check_circle : Icons.radio_button_unchecked,
+              selected ? Icons.check_box : Icons.check_box_outline_blank,
               color: selected ? AppTheme.brandBlue : const Color(0xFFD4DCE8),
               size: 22.sp,
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Header row of the select step: toggles the whole list and shows how many
+/// parcels are in the batch so far.
+class _SelectAllRow extends StatelessWidget {
+  const _SelectAllRow({
+    super.key,
+    required this.selected,
+    required this.count,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14.r),
+      onTap: onTap,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 6.h),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.check_box : Icons.check_box_outline_blank,
+              color: selected ? AppTheme.brandBlue : const Color(0xFFB9C3D2),
+              size: 22.sp,
+            ),
+            SizedBox(width: 8.w),
+            Expanded(
+              child: Text(
+                _SendTextKeys.selectAll.tr(),
+                style: TextStyle(
+                  color: const Color(0xFF6F7D8F),
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            if (count > 0)
+              Text(
+                _SendTextKeys.parcelCount.tr(args: ['$count']),
+                style: TextStyle(
+                  color: AppTheme.brandBlue,
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
           ],
         ),
       ),
@@ -819,9 +1157,9 @@ class _Header extends StatelessWidget {
 }
 
 class _SelectedParcelSummary extends StatelessWidget {
-  const _SelectedParcelSummary({required this.item});
+  const _SelectedParcelSummary({required this.items});
 
-  final SendParcelItem item;
+  final List<SendParcelItem> items;
 
   @override
   Widget build(BuildContext context) {
@@ -846,7 +1184,11 @@ class _SelectedParcelSummary extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _SendTextKeys.selectedParcelLabel.tr(),
+                  items.length == 1
+                      ? _SendTextKeys.selectedParcelLabel.tr()
+                      : _SendTextKeys.selectedParcelsLabel.tr(
+                          args: ['${items.length}'],
+                        ),
                   style: TextStyle(
                     color: AppTheme.brandBlue,
                     fontSize: 12.sp,
@@ -854,14 +1196,20 @@ class _SelectedParcelSummary extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: 2.h),
-                Text(
-                  item.title,
-                  style: TextStyle(
-                    color: AppTheme.brandBlueDark,
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w800,
+                for (final item in items)
+                  Padding(
+                    padding: EdgeInsets.only(top: 2.h),
+                    child: Text(
+                      items.length == 1
+                          ? item.title
+                          : '${item.title} · ${item.trackNo}',
+                      style: TextStyle(
+                        color: AppTheme.brandBlueDark,
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -1082,11 +1430,15 @@ class _PriceRow extends StatelessWidget {
     required this.label,
     required this.amount,
     this.highlight = false,
+    this.compact = false,
   });
 
   final String label;
   final String amount;
   final bool highlight;
+
+  /// Breakdown rows sit under the total, so they read smaller.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1095,20 +1447,31 @@ class _PriceRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: highlight
                   ? const Color(0xFF101010)
                   : const Color(0xFF6F7D8F),
-              fontSize: highlight ? 18.sp : 15.sp,
+              fontSize: highlight
+                  ? 18.sp
+                  : compact
+                  ? 14.sp
+                  : 15.sp,
               fontWeight: FontWeight.w800,
             ),
           ),
         ),
+        SizedBox(width: 8.w),
         Text(
           amount,
           style: TextStyle(
             color: highlight ? AppTheme.brandBlueDark : const Color(0xFF101010),
-            fontSize: highlight ? 32.sp : 24.sp,
+            fontSize: highlight
+                ? 32.sp
+                : compact
+                ? 17.sp
+                : 24.sp,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -1169,6 +1532,9 @@ class _SendTextKeys {
   static const String nextButton = 'send_next_button';
   static const String recipientTitle = 'send_recipient_title';
   static const String selectedParcelLabel = 'send_selected_parcel_label';
+  static const String selectedParcelsLabel = 'send_selected_parcels_label';
+  static const String selectAll = 'send_select_all';
+  static const String parcelCount = 'send_parcel_count';
   static const String recipientNameLabel = 'send_recipient_name_label';
   static const String recipientNameHint = 'send_recipient_name_hint';
   static const String recipientPhoneLabel = 'send_recipient_phone_label';
@@ -1195,7 +1561,6 @@ class _SendTextKeys {
   static const String mapPlaceholder = 'send_map_placeholder';
   static const String mapDesktopNotSupported = 'send_map_desktop_not_supported';
   static const String backTooltip = 'send_back_tooltip';
-  static const String actionNotImplemented = 'action_not_implemented';
   static const String emptySelectableParcels = 'send_empty_selectable_parcels';
   static const String loadParcelsError = 'send_load_parcels_error';
   static const String reselectParcel = 'send_reselect_parcel';

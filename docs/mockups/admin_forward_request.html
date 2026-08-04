@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Forward Request — CLS Admin mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", "Noto Sans Lao", sans-serif;
+    background: #f4f5f7;
+    color: #1f2733;
+    font-size: 13px;
+  }
+  .app { display: flex; min-height: 100vh; }
+
+  /* ---------- sidebar ---------- */
+  .sidebar { width: 258px; background: #fff; padding: 18px 16px; flex: none; }
+  .logo {
+    width: 74px; height: 74px; border-radius: 10px; background: #0b3d91;
+    color: #fff; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; margin-bottom: 26px; border: 2px solid #0b3d91;
+  }
+  .logo .lo { font-size: 8px; letter-spacing: .2px; }
+  .logo .cls { font-size: 27px; font-weight: 800; letter-spacing: 1px; line-height: 1; }
+  .logo .tel { font-size: 6.5px; margin-top: 2px; }
+  .nav a {
+    display: flex; align-items: center; gap: 13px; padding: 12px 14px;
+    border-radius: 9px; color: #4a5568; text-decoration: none;
+    font-size: 14px; margin-bottom: 3px;
+  }
+  .nav a.active { background: #2563eb; color: #fff; font-weight: 600; }
+  .nav .ico { width: 18px; text-align: center; opacity: .75; font-size: 15px; }
+  .nav a.active .ico { opacity: 1; }
+  .nav .count {
+    margin-left: auto; background: #ef4444; color: #fff; font-size: 11px;
+    font-weight: 700; border-radius: 10px; padding: 1px 7px;
+  }
+  .nav a.active .count { background: #fff; color: #2563eb; }
+  .nav .chev { margin-left: auto; opacity: .5; }
+
+  /* ---------- main ---------- */
+  .main { flex: 1; padding: 0 34px 40px; min-width: 0; }
+  .topbar { display: flex; justify-content: flex-end; align-items: center; gap: 9px; height: 78px; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; background: #d8dee9; overflow: hidden; }
+  .avatar div { width: 100%; height: 100%; background: radial-gradient(circle at 50% 38%, #fff 0 26%, #cbd5e1 27% 100%); }
+  .topbar span { font-size: 15px; color: #374151; }
+
+  h1 { font-size: 30px; font-weight: 800; letter-spacing: -.3px; }
+  .page-head { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 24px; }
+  .btn-primary {
+    background: #2563eb; color: #fff; border: 0; border-radius: 9px;
+    padding: 12px 22px; font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+
+  .card { background: #fff; border-radius: 14px; padding: 26px 24px 18px; }
+
+  /* ---------- filters ---------- */
+  .filters { display: flex; gap: 18px; align-items: flex-end; margin-bottom: 8px; flex-wrap: wrap; }
+  .field label { display: block; font-size: 14px; color: #4b5563; margin-bottom: 7px; }
+  .control {
+    height: 42px; border: 1px solid #dfe3e8; border-radius: 8px; background: #fff;
+    display: flex; align-items: center; padding: 0 12px; color: #9aa4b2; font-size: 14px;
+    justify-content: space-between; gap: 10px;
+  }
+  .w-search { width: 300px; }
+  .w-sel { width: 210px; }
+  .w-date { width: 235px; }
+  .control.filled { color: #1f2733; }
+  .control .badge-sm {
+    background: #fff3e2; color: #b45309; border-radius: 6px;
+    padding: 2px 9px; font-size: 12.5px; font-weight: 600;
+  }
+  .link-clear { color: #2563eb; font-size: 13.5px; text-decoration: none; padding-bottom: 12px; }
+
+  /* ---------- table ---------- */
+  table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  thead th {
+    text-align: left; font-size: 12.5px; color: #6b7280; font-weight: 600;
+    padding: 10px 8px; border-bottom: 1px solid #eceff3; vertical-align: bottom; line-height: 1.3;
+  }
+  thead th.r { text-align: right; }
+  tbody td {
+    padding: 13px 8px; border-bottom: 1px solid #f2f4f7; font-size: 13px;
+    color: #22303f; vertical-align: middle;
+  }
+  tbody td.r { text-align: right; }
+  tbody tr:hover { background: #fafbfc; }
+  .sub { display: block; color: #9aa4b2; font-size: 11.5px; margin-top: 2px; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .billno { color: #2563eb; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .addr { max-width: 168px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
+  .pin { color: #2563eb; margin-left: 4px; }
+
+  .cb { width: 16px; height: 16px; border: 1.5px solid #cbd5e1; border-radius: 50%; display: inline-block; }
+  .cb.off { border-color: #e5e9ef; background: #f6f7f9; }
+
+  .badge { display: inline-block; border-radius: 7px; padding: 4px 12px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .b-paid    { background: #d9f5e3; color: #1b7a45; }
+  .b-pending { background: #eceef2; color: #5b6472; }
+  .b-failed  { background: #fde2e1; color: #b42318; }
+  .b-expired { background: #fdecd8; color: #b45309; }
+  .b-ready   { background: #f2a13c; color: #fff; }
+  .b-await   { background: #eceef2; color: #5b6472; }
+  .b-handed  { background: #dbeafe; color: #1d4ed8; }
+  .b-done    { background: #d9f5e3; color: #1b7a45; }
+  .b-cancel  { background: #fde2e1; color: #b42318; }
+
+  .sla { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ef4444; margin-right: 6px; vertical-align: middle; }
+  .acts { color: #7b8794; font-size: 15px; white-space: nowrap; }
+  .acts span { margin-right: 9px; }
+  .acts .send { color: #22c55e; }
+
+  /* ---------- footer ---------- */
+  .foot { display: flex; align-items: center; justify-content: space-between; padding: 16px 4px 4px; }
+  .pager { display: flex; align-items: center; gap: 10px; color: #98a2b3; }
+  .pager .pg { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .pager .pg.on { background: #eef2ff; color: #2563eb; font-weight: 600; }
+  .foot .right { color: #6b7280; font-size: 14px; display: flex; gap: 26px; }
+
+  .bulkbar {
+    display: flex; align-items: center; gap: 14px; background: #eef4ff;
+    border: 1px solid #d5e2ff; border-radius: 10px; padding: 11px 16px; margin-top: 14px;
+    font-size: 13.5px; color: #1e40af;
+  }
+  .bulkbar .b { background: #fff; border: 1px solid #c7d7fb; border-radius: 7px; padding: 6px 13px; color: #1d4ed8; font-weight: 600; }
+  .bulkbar .spacer { flex: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="lo">ຈະເລີນສຸດຍອດ</div>
+      <div class="cls">CLS</div>
+      <div class="tel">📞 02095446062</div>
+    </div>
+    <nav class="nav">
+      <a href="#"><span class="ico">⤓</span>Import data</a>
+      <a href="#"><span class="ico">🗄</span>Parcel</a>
+      <a href="#"><span class="ico">🕐</span>Parcel Waiting Import</a>
+      <a href="#"><span class="ico">💳</span>Bill</a>
+      <a href="#"><span class="ico">📄</span>Request Change</a>
+      <a class="active" href="#"><span class="ico">🚚</span>Forward Request<span class="count">6</span></a>
+      <a href="#"><span class="ico">💵</span>Payment</a>
+      <a href="#"><span class="ico">🔖</span>Income / Expenses</a>
+      <a href="#"><span class="ico">💰</span>Topup</a>
+      <a href="#"><span class="ico">💬</span>Live Chat</a>
+      <a href="#"><span class="ico">📊</span>Report<span class="chev">›</span></a>
+      <a href="#"><span class="ico">⚙️</span>Setting<span class="chev">›</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="avatar"><div></div></div>
+      <span>admin ›</span>
+    </div>
+
+    <div class="page-head">
+      <h1>Forward Request</h1>
+    </div>
+
+    <div class="card">
+      <div class="filters">
+        <div class="field w-search">
+          <label>Search</label>
+          <div class="control"><span>Bill no., tracking, name, phone...</span><span>🔍</span></div>
+        </div>
+        <div class="field w-sel">
+          <label>Payment Status</label>
+          <div class="control"><span>Select...</span><span>⌄</span></div>
+        </div>
+        <div class="field w-sel">
+          <label>Forward Status</label>
+          <div class="control filled"><span class="badge-sm">Ready</span><span>⌄</span></div>
+        </div>
+        <a class="link-clear" href="#">Clear filters</a>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:34px">No</th>
+            <th style="width:106px">Bill No.</th>
+            <th style="width:172px">Tracking No.</th>
+            <th style="width:120px">Recipient</th>
+            <th style="width:96px">Phone</th>
+            <th style="width:186px">Address</th>
+            <th style="width:110px">Courier /<br>Branch</th>
+            <th style="width:104px">Weight</th>
+            <th class="r" style="width:96px">Amount<br>(LAK)</th>
+            <th style="width:88px">Payment</th>
+            <th style="width:146px">Forward</th>
+            <th style="width:126px">Create Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><a class="billno mono" href="#">2607-00021</a></td>
+            <td class="mono">#DPK212498891087-2<span class="sub">翁利</span></td>
+            <td>ນາງ ສົມໃຈ</td>
+            <td class="mono">91050433</td>
+            <td><span class="addr">Ban Phonkheng, house 25, road 13</span><span class="pin">📍</span></td>
+            <td>Flash<span class="sub">Savannakhet</span></td>
+            <td class="mono">17.32 kg<span class="sub">billed 18 kg</span></td>
+            <td class="r mono">47,000.00</td>
+            <td><span class="badge b-paid">Paid</span></td>
+            <td><span class="badge b-ready">Ready</span> <span style="color:#9aa4b2">⌄</span></td>
+            <td class="mono">2026-07-29<span class="sub">19:14:37</span></td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td><a class="billno mono" href="#">2607-00020</a></td>
+            <td class="mono">#DPK212498891087-3<span class="sub">翁利</span></td>
+            <td>ທ້າວ ບຸນມີ</td>
+            <td class="mono">91050433</td>
+            <td><span class="addr">Ban Hongkae, Nongbone Road</span><span class="pin">📍</span></td>
+            <td>J&amp;T<span class="sub">Vientiane</span></td>
+            <td class="mono">4.10 kg<span class="sub">billed 5 kg</span></td>
+            <td class="r mono">18,000.00</td>
+            <td><span class="badge b-paid">Paid</span></td>
+            <td><span class="badge b-ready">Ready</span> <span style="color:#9aa4b2">⌄</span></td>
+            <td class="mono">2026-07-29<span class="sub">11:02:18</span></td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td><a class="billno mono" href="#">2607-00019</a></td>
+            <td class="mono">#JT5397655168182<span class="sub">bomkpm</span></td>
+            <td>ນາງ ຄຳຫລ້າ</td>
+            <td class="mono">56368825</td>
+            <td><span class="addr">Ban Sisattanak, unit 7, house 112</span><span class="pin">📍</span></td>
+            <td>Flash<span class="sub">Pakse</span></td>
+            <td class="mono">22.60 kg<span class="sub">billed 23 kg</span></td>
+            <td class="r mono">61,000.00</td>
+            <td><span class="badge b-paid">Paid</span></td>
+            <td><span class="badge b-ready">Ready</span> <span style="color:#9aa4b2">⌄</span></td>
+            <td class="mono">2026-07-28</span><span class="sub">17:56:42</span></td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td><a class="billno mono" href="#">2607-00018</a></td>
+            <td class="mono">#777408472932861<span class="sub">rolan</span></td>
+            <td>ທ້າວ ສີສະຫວາດ</td>
+            <td class="mono">56885905</td>
+            <td><span class="addr">Ban Dongpaosy, road 450 years</span><span class="pin">📍</span></td>
+            <td>Anousith<span class="sub">Savannakhet</span></td>
+            <td class="mono">1.50 kg<span class="sub">billed 2 kg</span></td>
+            <td class="r mono">9,000.00</td>
+            <td><span class="badge b-paid">Paid</span></td>
+            <td><span class="badge b-handed">Handed to courier</span></td>
+            <td class="mono">2026-07-27<span class="sub">01:33:22</span></td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td><a class="billno mono" href="#">2607-00017</a></td>
+            <td class="mono">#777408472932862<span class="sub">rolan</span></td>
+            <td>ນາງ ວັນນະສອນ</td>
+            <td class="mono">52752098</td>
+            <td><span class="addr">Ban Thatluang Tai, house 8</span><span class="pin">📍</span></td>
+            <td>Flash<span class="sub">Vientiane</span></td>
+            <td class="mono">6.80 kg<span class="sub">billed 7 kg</span></td>
+            <td class="r mono">25,000.00</td>
+            <td><span class="badge b-pending">Pending</span></td>
+            <td><span class="badge b-await">Awaiting payment</span></td>
+            <td class="mono">2026-07-27<span class="sub">01:32:49</span></td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td><a class="billno mono" href="#">2607-00016</a></td>
+            <td class="mono">#SF3287861070963<span class="sub">lucy</span></td>
+            <td>ທ້າວ ໄຊຍະ</td>
+            <td class="mono">59217242</td>
+            <td><span class="addr">Ban Nongbone, alley 3</span><span class="pin">📍</span></td>
+            <td>J&amp;T<span class="sub">Vientiane</span></td>
+            <td class="mono">12.05 kg<span class="sub">billed 13 kg</span></td>
+            <td class="r mono">36,000.00</td>
+            <td><span class="badge b-expired">Expired</span></td>
+            <td><span class="badge b-await">Awaiting payment</span></td>
+            <td class="mono">2026-07-27<span class="sub">00:55:22</span></td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td><a class="billno mono" href="#">2607-00015</a></td>
+            <td class="mono">#735682841365018<span class="sub">minnie</span></td>
+            <td>ນາງ ພອນສະຫວັນ</td>
+            <td class="mono">56885905</td>
+            <td><span class="addr">Ban Phonsavan Tai, house 301</span><span class="pin">📍</span></td>
+            <td>Flash<span class="sub">Savannakhet</span></td>
+            <td class="mono">9.40 kg<span class="sub">billed 10 kg</span></td>
+            <td class="r mono">30,000.00</td>
+            <td><span class="badge b-paid">Paid</span></td>
+            <td><span class="badge b-done">Completed</span></td>
+            <td class="mono">2026-07-26<span class="sub">23:44:58</span></td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td><a class="billno mono" href="#">2607-00014</a></td>
+            <td class="mono">#773372048659839<span class="sub">yai</span></td>
+            <td>ທ້າວ ຄຳສອນ</td>
+            <td class="mono">59217242</td>
+            <td><span class="addr">Ban Chommany, road 13 north</span><span class="pin">📍</span></td>
+            <td>Anousith<span class="sub">Luang Prabang</span></td>
+            <td class="mono">3.20 kg<span class="sub">billed 4 kg</span></td>
+            <td class="r mono">15,000.00</td>
+            <td><span class="badge b-failed">Failed</span></td>
+            <td><span class="badge b-cancel">Cancelled</span></td>
+            <td class="mono">2026-07-26<span class="sub">23:17:46</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="foot">
+        <div class="pager">
+          <span class="pg">←</span><span class="pg on">1</span><span class="pg">→</span>
+        </div>
+        <div class="right"><span>1000 items ›</span><span>174 Results</span></div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

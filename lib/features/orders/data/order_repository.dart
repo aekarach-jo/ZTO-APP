@@ -34,6 +34,8 @@ class OrderSummary {
     this.recipientName,
     this.createdAt,
     this.paidAt,
+    this.billNo,
+    this.paymentNo,
   });
 
   final String id;
@@ -44,6 +46,10 @@ class OrderSummary {
   final String? recipientName;
   final DateTime? createdAt;
   final DateTime? paidAt;
+
+  /// Receipt numbers, present once the payment settled.
+  final String? billNo;
+  final String? paymentNo;
 
   bool get isForward => type == 'forward';
 
@@ -59,6 +65,8 @@ class OrderSummary {
       recipientName: json['recipientName']?.toString(),
       createdAt: _readDate(json['createdAt'] ?? json['created_at']),
       paidAt: _readDate(json['paidAt'] ?? json['paid_at']),
+      billNo: _readRef(json['billNo'] ?? json['bill_no']),
+      paymentNo: _readRef(json['paymentNo'] ?? json['payment_no']),
     );
   }
 }
@@ -115,6 +123,16 @@ int? _readInt(dynamic value) {
     return int.tryParse(value.trim()) ?? double.tryParse(value.trim())?.round();
   }
   return null;
+}
+
+/// Reads an optional reference string (bill/payment number), treating empty
+/// strings as absent so the card doesn't render blank rows.
+String? _readRef(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  final text = value.toString().trim();
+  return text.isEmpty ? null : text;
 }
 
 DateTime? _readDate(dynamic value) {

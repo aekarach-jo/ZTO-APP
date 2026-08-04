@@ -182,9 +182,10 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(HomeScreen)),
     );
-    // Forward pre-selects the parcel (id '2') and asks the shell to jump to
-    // the Send tab (index 1) instead of showing a "coming soon" snackbar.
-    expect(container.read(sendForwardPrefillProvider), '2');
+    // Forward pre-selects the whole group (here only parcel id '2') and asks
+    // the shell to jump to the Send tab (index 1) instead of showing a
+    // "coming soon" snackbar.
+    expect(container.read(sendForwardPrefillProvider), ['2']);
     expect(container.read(customerTabJumpTargetProvider), 1);
   });
 

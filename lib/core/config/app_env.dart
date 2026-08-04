@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AppEnv {
@@ -5,13 +6,17 @@ class AppEnv {
 
   static String get appEnv => dotenv.env['APP_ENV'] ?? 'dev';
 
-  static String get apiBaseUrl => removeEndpointPort(
-    dotenv.env['API_BASE_URL'] ?? 'http://14.207.141.82/api/v1',
-  );
+  /// Production API origin, used as the fallback when no `.env` is bundled so a
+  /// misconfigured release build can never fall back to a plaintext dev server.
+  static const String _defaultApiBaseUrl =
+      'https://api.tt-tradingsole.com/api/v1';
+
+  static String get apiBaseUrl =>
+      removeEndpointPort(dotenv.env['API_BASE_URL'] ?? _defaultApiBaseUrl);
 
   /// Base URL for the Socket.IO chat server (without namespace).
   ///
-  /// Defaults to the SAME origin as the REST API (e.g. `http://14.207.141.82`),
+  /// Defaults to the SAME origin as the REST API (e.g. `https://api.tt-tradingsole.com`),
   /// which is served by nginx in front of the backend that issues the JWT.
   /// The raw backend port (:3000) can be a different instance/secret and reject
   /// REST-issued tokens with `Unauthorized`, so we reuse the REST origin.
@@ -43,9 +48,9 @@ class AppEnv {
   static String _deriveSocketBaseUrl(String apiBaseUrl) {
     final uri = Uri.tryParse(apiBaseUrl);
     if (uri == null || !uri.hasAuthority) {
-      return 'http://14.207.141.82';
+      return _deriveSocketBaseUrl(_defaultApiBaseUrl);
     }
-    final scheme = uri.scheme.isEmpty ? 'http' : uri.scheme;
+    final scheme = uri.scheme.isEmpty ? 'https' : uri.scheme;
     final port = uri.hasPort ? ':${uri.port}' : '';
     return '$scheme://${uri.host}$port';
   }
@@ -84,9 +89,15 @@ class AppEnv {
 }
 
 Future<void> loadAppEnv({String? fileName}) async {
+  // Release builds (Play Store / App Store) always read `.env.prod` unless an
+  // explicit `--dart-define=ENV_FILE=...` overrides it, so shipping a store
+  // build can never pick up the plaintext dev endpoint in `.env`.
+  const envFileOverride = String.fromEnvironment('ENV_FILE');
   final resolvedFileName =
       fileName ??
-      const String.fromEnvironment('ENV_FILE', defaultValue: '.env');
+      (envFileOverride.isNotEmpty
+          ? envFileOverride
+          : (kReleaseMode ? '.env.prod' : '.env'));
   try {
     await dotenv.load(fileName: resolvedFileName);
   } catch (_) {

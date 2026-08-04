@@ -14,6 +14,8 @@ import '../../features/parcel_claim/presentation/screens/parcel_claim_screen.dar
 import '../../features/parcel_payment/presentation/screens/parcel_payment_screen.dart';
 import '../../features/parcel_status/presentation/screens/parcel_status_screen.dart';
 import '../../features/orders/presentation/screens/order_history_screen.dart';
+import '../../features/profile/presentation/screens/address_book_screen.dart';
+import '../../features/profile/presentation/screens/default_forwarding_address_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 
 const String appStartupRoutePath = '/startup';
@@ -138,6 +140,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: EditProfileScreen.routePath,
         builder: (context, state) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        path: DefaultForwardingAddressScreen.routePath,
+        builder: (context, state) => const DefaultForwardingAddressScreen(),
+      ),
+      GoRoute(
+        path: AddressBookScreen.routePath,
+        builder: (context, state) => const AddressBookScreen(),
       ),
       GoRoute(
         path: ParcelPaymentScreen.routePath,

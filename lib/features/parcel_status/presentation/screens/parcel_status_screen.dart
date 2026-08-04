@@ -422,7 +422,7 @@ class _StatusParcelCard extends StatelessWidget {
             ],
           ),
           SizedBox(height: 16.h),
-          _StepTracker(currentStep: item.step),
+          _StepTracker(currentStep: item.step, isForward: item.isForward),
           if (item.order != null) ...[
             SizedBox(height: 14.h),
             Divider(height: 1, color: const Color(0xFFE8EEF6)),
@@ -436,30 +436,43 @@ class _StatusParcelCard extends StatelessWidget {
 }
 
 class _StepTracker extends StatelessWidget {
-  const _StepTracker({required this.currentStep});
+  const _StepTracker({required this.currentStep, required this.isForward});
 
   final int currentStep;
+  final bool isForward;
 
-  static const List<String> _stepLabelKeys = [
+  /// Pickup and forward run different flows, so the four nodes mean different
+  /// things per type (backend sends `step` accordingly).
+  static const List<String> _pickupStepLabelKeys = [
     'status_step_arrived',
     'status_step_ready',
-    'status_step_delivering',
-    'status_step_success',
+    'status_step_paid',
+    'status_step_picked_up',
+  ];
+
+  static const List<String> _forwardStepLabelKeys = [
+    'status_step_arrived',
+    'status_step_paid',
+    'status_step_payment_confirmed',
+    'status_step_forwarded',
   ];
 
   @override
   Widget build(BuildContext context) {
+    final labelKeys = isForward
+        ? _forwardStepLabelKeys
+        : _pickupStepLabelKeys;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < _stepLabelKeys.length; i++) ...[
+        for (var i = 0; i < labelKeys.length; i++) ...[
           Expanded(
             child: _StepNode(
               stepNumber: i + 1,
-              labelKey: _stepLabelKeys[i],
+              labelKey: labelKeys[i],
               active: (i + 1) <= currentStep,
               isFirst: i == 0,
-              isLast: i == _stepLabelKeys.length - 1,
+              isLast: i == labelKeys.length - 1,
               connectorActive: (i + 1) < currentStep,
             ),
           ),
@@ -588,6 +601,20 @@ class _OrderSummary extends StatelessWidget {
               ),
           ],
         ),
+        if (order.billNo != null) ...[
+          SizedBox(height: 6.h),
+          _OrderRefRow(
+            label: 'pickup_payment_receipt_bill_no'.tr(),
+            value: order.billNo!,
+          ),
+        ],
+        if (order.paymentNo != null) ...[
+          SizedBox(height: 4.h),
+          _OrderRefRow(
+            label: 'pickup_payment_receipt_payment_no'.tr(),
+            value: order.paymentNo!,
+          ),
+        ],
         if (order.paymentRef != null && order.paymentRef!.isNotEmpty) ...[
           SizedBox(height: 4.h),
           Text(
@@ -599,6 +626,40 @@ class _OrderSummary extends StatelessWidget {
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// Label/value pair for the receipt numbers under an order summary.
+class _OrderRefRow extends StatelessWidget {
+  const _OrderRefRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: const Color(0xFF9AA7B8),
+              fontSize: 11.sp,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: const Color(0xFF6E7D92),
+            fontSize: 11.sp,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ],
     );
   }

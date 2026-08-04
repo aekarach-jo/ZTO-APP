@@ -8,8 +8,16 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/notification_repository.dart';
 
-class NotificationsScreen extends ConsumerWidget {
+class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
+
+  @override
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  bool _isClearing = false;
 
   Future<void> _handleNotificationTap(
     BuildContext context,
@@ -33,9 +41,63 @@ class NotificationsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _handleClearAll() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(_NotiTextKeys.clearConfirmTitle.tr()),
+        content: Text(_NotiTextKeys.clearConfirmMessage.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(_NotiTextKeys.cancel.tr()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              _NotiTextKeys.clearConfirmAction.tr(),
+              style: const TextStyle(color: Color(0xFFD64545)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || _isClearing) {
+      return;
+    }
+
+    setState(() => _isClearing = true);
+    try {
+      await ref.read(notificationRepositoryProvider).deleteAll();
+      ref.invalidate(notificationsProvider);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_NotiTextKeys.clearSuccess.tr())));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_NotiTextKeys.clearError.tr())));
+    } finally {
+      if (mounted) {
+        setState(() => _isClearing = false);
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final notificationsAsync = ref.watch(notificationsProvider);
+    final hasNotifications = notificationsAsync.maybeWhen(
+      data: (items) => items.isNotEmpty,
+      orElse: () => false,
+    );
 
     return RefreshIndicator(
       onRefresh: () => ref.refresh(notificationsProvider.future),
@@ -79,6 +141,29 @@ class NotificationsScreen extends ConsumerWidget {
               ),
             ],
           ),
+          if (hasNotifications) ...[
+            SizedBox(height: 4.h),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: _isClearing ? null : _handleClearAll,
+                icon: _isClearing
+                    ? SizedBox.square(
+                        dimension: 16.sp,
+                        child: const CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.delete_sweep_outlined, size: 19.sp),
+                label: Text(_NotiTextKeys.clearAll.tr()),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFD64545),
+                  textStyle: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
           SizedBox(height: 14.h),
           notificationsAsync.when(
             data: (items) {
@@ -261,5 +346,13 @@ class _NotiTextKeys {
   static const String empty = 'notifications_empty';
   static const String loadError = 'notifications_load_error';
   static const String markReadError = 'notifications_mark_read_error';
+  static const String clearAll = 'notifications_clear_all';
+  static const String clearConfirmTitle = 'notifications_clear_confirm_title';
+  static const String clearConfirmMessage =
+      'notifications_clear_confirm_message';
+  static const String clearConfirmAction = 'notifications_clear_confirm_action';
+  static const String clearSuccess = 'notifications_clear_success';
+  static const String clearError = 'notifications_clear_error';
+  static const String cancel = 'common_cancel';
   static const String retry = 'common_retry';
 }

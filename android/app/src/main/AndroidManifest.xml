@@ -4,11 +4,32 @@
     <!-- Saving the payment QR image to the gallery on Android 9 (API 28) and below. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
+    <!-- Centring the recipient pin on the device's current position. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
+    <!-- Declaring CAMERA and the location permissions makes Play imply the
+         matching hardware features as REQUIRED, which hides the app from
+         devices that lack them. Every one of these is optional here: without a
+         camera you pick images from the gallery, without GPS you drop the map
+         pin by hand. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.location.network" android:required="false" />
+
+    <!-- Auto Backup would restore the encrypted flutter_secure_storage file to a
+         device whose keystore cannot decrypt it, leaving the user stuck on a
+         broken session after a device transfer. -->
     <application
         android:label="CLS Global"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"

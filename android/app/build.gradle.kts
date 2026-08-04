@@ -20,6 +20,24 @@ val keystoreProperties = Properties().apply {
 }
 val hasReleaseSigning = keystorePropertiesFile.exists()
 
+// The debug-key fallback above is fine for `flutter run --release`, but an app
+// bundle signed with it is the artifact that goes to Play — and Play rejects it
+// only after the upload, long after the mistake. Fail here instead, where the
+// message can say what is actually wrong.
+if (!hasReleaseSigning) {
+    val buildingUploadArtifact = gradle.startParameter.taskNames.any {
+        it.contains("bundle", ignoreCase = true) && it.contains("release", ignoreCase = true)
+    }
+    if (buildingUploadArtifact) {
+        throw GradleException(
+            "Refusing to build a release app bundle without android/key.properties — " +
+                "it would be signed with the debug key and Play Console will reject it. " +
+                "Restore key.properties (keyAlias, keyPassword, storeFile, storePassword) " +
+                "from your password manager before building the upload artifact."
+        )
+    }
+}
+
 android {
     namespace = "com.zto.zto_app"
     compileSdk = flutter.compileSdkVersion

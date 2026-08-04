@@ -32,6 +32,29 @@ void main() {
     expect(captured.path, '/notifications/notification-123/read');
   });
 
+  test('deleteAll uses the delete-all notifications endpoint', () async {
+    final dio = Dio(BaseOptions(baseUrl: 'http://example.com'));
+    late RequestOptions captured;
+
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          captured = options;
+          handler.resolve(
+            Response<dynamic>(requestOptions: options, statusCode: 204),
+          );
+        },
+      ),
+    );
+
+    final repository = NotificationRepository(dio: dio);
+
+    await repository.deleteAll();
+
+    expect(captured.method, 'DELETE');
+    expect(captured.path, '/notifications');
+  });
+
   test('AppNotification maps API read flags to isUnread correctly', () {
     final unreadNotification = AppNotification.fromJson(const {
       'id': 'n1',

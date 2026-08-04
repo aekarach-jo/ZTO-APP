@@ -41,6 +41,7 @@ Widget _buildTestApp(
                       email: 'somchai@email.com',
                       phone: '02000000',
                       profileImage: '',
+                      language: 'en',
                     );
                   }),
                   ordersProvider.overrideWith((ref) async {

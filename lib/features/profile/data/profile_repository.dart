@@ -12,12 +12,17 @@ class UserProfile {
     required this.email,
     required this.phone,
     required this.profileImage,
+    required this.language,
   });
 
   final String id;
   final String displayName;
   final String email;
   final String phone;
+
+  /// Push/notification language the backend has on file (`lo`/`zh`/`en`), or
+  /// empty when the backend did not return a supported value.
+  final String language;
 
   /// Avatar URL/path (may be relative, e.g. `/uploads/chat/x.jpg`).
   final String profileImage;
@@ -50,6 +55,9 @@ class UserProfile {
         json,
         const ['profileImage', 'profile_image', 'avatar', 'photo', 'image'],
       ),
+      language: normalizeUserLanguage(
+        _readString(json, const ['language', 'lang', 'locale']),
+      ),
     );
   }
 
@@ -66,6 +74,19 @@ class UserProfile {
     }
     return '';
   }
+}
+
+/// Language codes `PATCH /users/me/language` accepts. The backend defaults a
+/// user to `lo`, so anything the app sends has to be one of these.
+const Set<String> kSupportedUserLanguages = {'lo', 'zh', 'en'};
+
+/// Maps a raw value (e.g. `zh-CN`, `EN`) onto a supported code, or `''`.
+String normalizeUserLanguage(String? raw) {
+  if (raw == null || raw.isEmpty) {
+    return '';
+  }
+  final code = raw.trim().toLowerCase().split(RegExp('[-_]')).first;
+  return kSupportedUserLanguages.contains(code) ? code : '';
 }
 
 class ProfileRepository {
@@ -110,6 +131,40 @@ class ProfileRepository {
       );
     }
     return UserProfile.fromJson(_unwrap(response.data));
+  }
+
+  /// Stores the customer's language via `PATCH /users/me/language`. The backend
+  /// composes every push notification from this value, so it has to be kept in
+  /// sync with the language shown in the UI.
+  Future<UserProfile> updateLanguage(String language) async {
+    final code = normalizeUserLanguage(language);
+    if (code.isEmpty) {
+      throw ArgumentError.value(language, 'language', 'unsupported language');
+    }
+
+    final response = await _dio.patch<dynamic>(
+      '/users/me/language',
+      data: {'language': code},
+    );
+    if (kDebugMode) {
+      debugPrint(
+        '[ProfileRepository] PATCH /users/me/language language=$code '
+        'status=${response.statusCode}',
+      );
+    }
+    return UserProfile.fromJson(_unwrap(response.data));
+  }
+
+  /// Deletes the signed-in account via `DELETE /users/me`. The backend strips
+  /// the PII, soft-deletes the user and frees the phone number for a fresh
+  /// registration, so there is nothing left to read back afterwards.
+  Future<void> deleteAccount() async {
+    final response = await _dio.delete<dynamic>('/users/me');
+    if (kDebugMode) {
+      debugPrint(
+        '[ProfileRepository] DELETE /users/me status=${response.statusCode}',
+      );
+    }
   }
 
   static Map<String, dynamic> _unwrap(dynamic data) {

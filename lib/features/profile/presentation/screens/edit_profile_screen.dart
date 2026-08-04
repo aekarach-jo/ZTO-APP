@@ -5,12 +5,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/config/app_env.dart';
 import '../../../../core/network/media_upload_repository.dart';
+import '../../../../core/network/network_providers.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../auth/presentation/screens/login_screen.dart';
 import '../../data/profile_repository.dart';
+
+/// Destructive-action red, matching the clear-all dialog on notifications.
+const Color _dangerRed = Color(0xFFD64545);
 
 /// Edits the signed-in user's name, email and avatar via `PATCH /users/me`.
 /// The avatar is uploaded to `POST /chat/upload` first, then its returned URL
@@ -32,6 +38,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   bool _initialised = false;
   bool _saving = false;
+  bool _deleting = false;
 
   /// Newly picked local avatar (not yet uploaded). Null until the user picks.
   File? _pickedImage;
@@ -171,6 +178,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   : Text('profile_edit_save'.tr()),
             ),
           ),
+          SizedBox(height: 16.h),
+          SizedBox(
+            width: double.infinity,
+            height: 52.h,
+            child: OutlinedButton(
+              key: const ValueKey('edit-profile-delete-account-button'),
+              onPressed: _saving || _deleting ? null : _confirmDeleteAccount,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _dangerRed,
+                side: const BorderSide(color: _dangerRed),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                textStyle: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w800),
+              ),
+              child: _deleting
+                  ? SizedBox(
+                      width: 22.w,
+                      height: 22.w,
+                      child: const CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _dangerRed,
+                      ),
+                    )
+                  : Text('profile_delete_account'.tr()),
+            ),
+          ),
         ],
       ),
     );
@@ -252,6 +286,67 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
   }
 
+  Future<void> _confirmDeleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('delete-account-confirm-dialog'),
+        title: Text('profile_delete_account_confirm_title'.tr()),
+        content: Text('profile_delete_account_confirm_message'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text('common_cancel'.tr()),
+          ),
+          TextButton(
+            key: const ValueKey('delete-account-confirm-action'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'profile_delete_account_confirm_action'.tr(),
+              style: const TextStyle(color: _dangerRed),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted || _deleting) {
+      return;
+    }
+    await _deleteAccount();
+  }
+
+  Future<void> _deleteAccount() async {
+    setState(() => _deleting = true);
+    try {
+      await ref.read(profileRepositoryProvider).deleteAccount();
+
+      // The account is gone, so `POST /auth/logout` would only fail on a token
+      // the backend no longer honours — and AuthRepository.logout() clears the
+      // storages *after* that call, which would leave the session behind. Drop
+      // the credentials here instead.
+      await ref.read(tokenStorageProvider).clear();
+      await ref.read(currentUserStorageProvider).clear();
+      ref.invalidate(authTokensProvider);
+      ref.invalidate(currentUserPhoneProvider);
+
+      if (!mounted) {
+        return;
+      }
+      _showSnack('profile_delete_account_success'.tr());
+      context.go(LoginScreen.routePath);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[EditProfile] deleteAccount failed error=$error');
+      }
+      _showSnack('profile_delete_account_failed'.tr());
+    } finally {
+      if (mounted) {
+        setState(() => _deleting = false);
+      }
+    }
+  }
+
   void _showSnack(String message) {
     if (!mounted) {
       return;
@@ -280,16 +375,15 @@ class _AvatarPicker extends StatelessWidget {
         children: [
           Stack(
             children: [
-              Container(
-                width: 110.w,
-                height: 110.w,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
+              // ClipOval keeps the photo edge-to-edge; a bordered circle
+              // Container insets the child and shows a white ring instead.
+              ClipOval(
+                child: Container(
+                  width: 110.w,
+                  height: 110.w,
                   color: const Color(0xFFE7F2FF),
-                  border: Border.all(color: Colors.white, width: 3),
+                  child: _buildImage(),
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: _buildImage(),
               ),
               Positioned(
                 right: 0,

@@ -177,6 +177,13 @@ class ForwardFeeQuote {
     final fee = 13000 + (billableKg - 1) * 2000;
     return ForwardFeeQuote(billableKg: billableKg, fee: fee);
   }
+
+  /// Forward orders combine all parcel weights before rounding and pricing.
+  factory ForwardFeeQuote.fromWeights(Iterable<double> weightsKg) {
+    return ForwardFeeQuote.fromWeight(
+      weightsKg.fold<double>(0, (total, weight) => total + weight),
+    );
+  }
 }
 
 class PaymentRepository {

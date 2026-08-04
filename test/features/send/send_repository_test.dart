@@ -1,8 +1,16 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zto_app/features/parcel_payment/data/payment_repository.dart';
 import 'package:zto_app/features/send/data/send_repository.dart';
 
 void main() {
+  test('forward fee combines parcel weights before billing', () {
+    final quote = ForwardFeeQuote.fromWeights(const [0.5, 0.5]);
+
+    expect(quote.billableKg, 1);
+    expect(quote.total, 13000);
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('fetchForwardableParcels flattens grouped parcel payload', () async {
@@ -62,79 +70,102 @@ void main() {
     expect(parcels.last.weightKg, 1.2);
   });
 
-  test('createForwardRequest posts NestJS forward payload and returns order', () async {
-    final dio = Dio(BaseOptions(baseUrl: 'http://example.com'));
-    late RequestOptions captured;
+  test(
+    'createForwardRequest posts NestJS forward payload and returns order',
+    () async {
+      final dio = Dio(BaseOptions(baseUrl: 'http://example.com'));
+      late RequestOptions captured;
 
-    dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          captured = options;
-          handler.resolve(
-            Response<dynamic>(
-              requestOptions: options,
-              statusCode: 201,
-              data: const <String, dynamic>{
-                'success': true,
-                'message': 'Forward order created',
-                'data': {
-                  'id': 'order-uuid-1',
-                  'type': 'forward',
-                  'amount': 40000,
-                  'currency': 'LAK',
-                  'items': [
-                    {
-                      'laravelParcelId': 999053943084,
-                      'price': 25000,
-                      'shippingFee': 15000,
-                      'itemTotal': 40000,
-                    },
-                  ],
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            captured = options;
+            handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 201,
+                data: const <String, dynamic>{
+                  'success': true,
+                  'message': 'Forward order created',
+                  'data': {
+                    'id': 'order-uuid-1',
+                    'type': 'forward',
+                    'amount': 40000,
+                    'currency': 'LAK',
+                    'items': [
+                      {
+                        'laravelParcelId': 999053943084,
+                        'price': 25000,
+                        'shippingFee': 15000,
+                        'itemTotal': 40000,
+                      },
+                    ],
+                  },
                 },
-              },
-            ),
-          );
-        },
-      ),
-    );
+              ),
+            );
+          },
+        ),
+      );
 
-    final repository = SendRepository(dio: dio);
+      final repository = SendRepository(dio: dio);
 
-    final order = await repository.createForwardRequest(
-      const CreateForwardRequest(
-        parcelId: '999053943084',
-        recipientName: 'Jane Doe',
-        recipientPhone: '0891234567',
-        recipientAddress: '123 Main Road',
-        courierName: 'Flash',
-        branchName: 'VTE-01',
-        latitude: 17.9757,
-        longitude: 102.6331,
-      ),
-    );
+      final order = await repository.createForwardOrder(const [
+        CreateForwardRequest(
+          parcelId: '999053943084',
+          recipientName: 'Jane Doe',
+          recipientPhone: '0891234567',
+          recipientAddress: '123 Main Road',
+          courierName: 'Flash',
+          branchName: 'VTE-01',
+          latitude: 17.9757,
+          longitude: 102.6331,
+        ),
+        CreateForwardRequest(
+          parcelId: '999053943085',
+          recipientName: 'Jane Doe',
+          recipientPhone: '0891234567',
+          recipientAddress: '123 Main Road',
+          courierName: 'Flash',
+          branchName: 'VTE-01',
+          latitude: 17.9757,
+          longitude: 102.6331,
+        ),
+      ]);
 
-    expect(captured.method, 'POST');
-    expect(captured.path, '/orders/forward');
-    expect(captured.data, {
-      'parcels': [
-        {
-          'laravelParcelId': 999053943084,
-          'recipientName': 'Jane Doe',
-          'recipientPhone': '0891234567',
-          'recipientAddress': '123 Main Road',
-          'courierName': 'Flash',
-          'branchName': 'VTE-01',
-          'lat': 17.9757,
-          'lng': 102.6331,
-        },
-      ],
-    });
-    expect(order.id, 'order-uuid-1');
-    expect(order.type, 'forward');
-    expect(order.amount, 40000);
-    expect(order.items.single.laravelParcelId, '999053943084');
-    expect(order.items.single.shippingFee, 15000);
-  });
+      expect(captured.method, 'POST');
+      expect(captured.path, '/orders/forward');
+      expect(captured.data, {
+        'parcels': [
+          {
+            'laravelParcelId': 999053943084,
+            'recipientName': 'Jane Doe',
+            'recipientPhone': '0891234567',
+            'recipientAddress': '123 Main Road',
+            'courierName': 'Flash',
+            'branchName': 'VTE-01',
+            'lat': 17.9757,
+            'lng': 102.6331,
+          },
+          {
+            'laravelParcelId': 999053943085,
+            'recipientName': 'Jane Doe',
+            'recipientPhone': '0891234567',
+            'recipientAddress': '123 Main Road',
+            'courierName': 'Flash',
+            'branchName': 'VTE-01',
+            'lat': 17.9757,
+            'lng': 102.6331,
+          },
+        ],
+      });
+      expect(order.id, 'order-uuid-1');
+      expect(order.type, 'forward');
+      expect(order.amount, 40000);
+      expect(order.items.single.laravelParcelId, '999053943084');
+      expect(order.items.single.shippingFee, 15000);
+    },
+  );
 
   test(
     'fetchForwardableParcels reads nested Swagger payload under data.data',

@@ -9,7 +9,10 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../parcel_status/application/parcel_status_tab_provider.dart';
 import '../../../parcel_status/presentation/screens/parcel_status_screen.dart';
 import '../../data/profile_repository.dart';
+import 'address_book_screen.dart';
 import 'edit_profile_screen.dart';
+
+enum _ProfileMenuAction { editProfile, addressBook }
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -78,23 +81,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: Column(
                     children: [
                       SizedBox(height: 12.h),
-                      Container(
-                        width: 106.w,
-                        height: 106.w,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          color: Colors.white,
+                      // ClipOval instead of a bordered Container: a border on a
+                      // circle Container insets the child, leaving a white ring
+                      // around the uploaded photo.
+                      ClipOval(
+                        child: SizedBox(
+                          width: 106.w,
+                          height: 106.w,
+                          child: (profile != null && profile.hasProfileImage)
+                              ? Image.network(
+                                  AppEnv.resolveMediaUrl(profile.profileImage),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const ColoredBox(
+                                        color: Colors.white,
+                                        child: Icon(Icons.person, size: 56),
+                                      ),
+                                )
+                              : const ColoredBox(
+                                  color: Colors.white,
+                                  child: Icon(Icons.person, size: 56),
+                                ),
                         ),
-                        clipBehavior: Clip.antiAlias,
-                        child: (profile != null && profile.hasProfileImage)
-                            ? Image.network(
-                                AppEnv.resolveMediaUrl(profile.profileImage),
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(Icons.person, size: 56),
-                              )
-                            : const Icon(Icons.person, size: 56),
                       ),
                       SizedBox(height: 12.h),
                       Text(
@@ -120,11 +128,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Positioned(
                   top: 0,
                   right: 0,
-                  child: IconButton(
-                    key: const ValueKey('profile-edit-button'),
-                    tooltip: 'profile_edit_title'.tr(),
-                    onPressed: () => context.push(EditProfileScreen.routePath),
-                    icon: const Icon(Icons.edit, color: Colors.white),
+                  child: PopupMenuButton<_ProfileMenuAction>(
+                    key: const ValueKey('profile-menu-button'),
+                    tooltip: 'profile_menu_tooltip'.tr(),
+                    icon: const Icon(Icons.more_horiz, color: Colors.white),
+                    onSelected: (action) {
+                      switch (action) {
+                        case _ProfileMenuAction.editProfile:
+                          context.push(EditProfileScreen.routePath);
+                        case _ProfileMenuAction.addressBook:
+                          context.push(AddressBookScreen.routePath);
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        key: const ValueKey('profile-menu-edit'),
+                        value: _ProfileMenuAction.editProfile,
+                        child: Text('profile_edit_title'.tr()),
+                      ),
+                      PopupMenuItem(
+                        key: const ValueKey('profile-menu-address-book'),
+                        value: _ProfileMenuAction.addressBook,
+                        child: Text('profile_address_book_menu'.tr()),
+                      ),
+                    ],
                   ),
                 ),
               ],

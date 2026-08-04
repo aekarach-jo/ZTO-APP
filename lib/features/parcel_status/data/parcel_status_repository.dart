@@ -65,6 +65,8 @@ class ParcelStatusOrder {
     this.method,
     this.paymentRef,
     this.paidAt,
+    this.billNo,
+    this.paymentNo,
   });
 
   final String nestOrderId;
@@ -74,20 +76,27 @@ class ParcelStatusOrder {
   final String? paymentRef;
   final DateTime? paidAt;
 
+  /// Receipt numbers issued once the payment settles (step 3 onwards).
+  final String? billNo;
+  final String? paymentNo;
+
   factory ParcelStatusOrder.fromJson(Map<String, dynamic> json) {
     return ParcelStatusOrder(
       nestOrderId: (json['nest_order_id'] ?? '').toString(),
       type: (json['type'] ?? '').toString(),
-      // The total actually charged (`price_lak`); older/other shapes may send
-      // `amount_lak` or only `item_total_lak`, so fall back through them.
+      // The amount actually charged. `amount_lak` is authoritative (forward =
+      // shipping fee only); `price_lak`/`item_total_lak` are the parcel's own
+      // price and overstate a forward order, so they are last-resort fallbacks.
       amountLak: _readDouble(
-        json['price_lak'] ?? json['amount_lak'] ?? json['item_total_lak'],
+        json['amount_lak'] ?? json['price_lak'] ?? json['item_total_lak'],
       ),
       method: json['method']?.toString(),
       paymentRef: json['payment_ref']?.toString(),
       paidAt: json['paid_at'] is String
           ? DateTime.tryParse(json['paid_at'] as String)
           : null,
+      billNo: _readRef(json['bill_no']),
+      paymentNo: _readRef(json['payment_no']),
     );
   }
 }
@@ -227,6 +236,16 @@ class ParcelStatusRepository {
       rethrow;
     }
   }
+}
+
+/// Reads an optional reference string (bill/payment number), treating empty
+/// strings as absent so the card doesn't render blank rows.
+String? _readRef(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  final text = value.toString().trim();
+  return text.isEmpty ? null : text;
 }
 
 int? _readInt(dynamic value) {

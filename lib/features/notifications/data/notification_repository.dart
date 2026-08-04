@@ -220,6 +220,16 @@ class NotificationRepository {
     }
   }
 
+  Future<void> deleteAll() async {
+    final response = await _dio.delete<dynamic>('/notifications');
+
+    if (kDebugMode) {
+      debugPrint(
+        '[NotificationRepository] DELETE /notifications status=${response.statusCode}',
+      );
+    }
+  }
+
   List<dynamic> _extractList(dynamic data) {
     if (data is List<dynamic>) {
       if (kDebugMode) {

@@ -27,11 +27,13 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Allow camera access to scan parcel QR codes.</string>
+	<string>Allow camera access to scan parcel QR codes, take your profile photo, and photograph parcels or documents you send to our support staff in chat.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Allow photo access to scan QR codes from images.</string>
+	<string>Allow photo access to scan QR codes from saved images, choose your profile photo, and attach images to a chat with our support staff.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Allow saving the payment QR code image to your photos.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Allow location access to start the recipient pin at your current position.</string>
 	<key>GMSApiKey</key>
 	<string>AIzaSyC6PcW7EYTMMTYwGRU_xNOnxHht8mZc9hA</string>
 	<key>UIApplicationSceneManifest</key>

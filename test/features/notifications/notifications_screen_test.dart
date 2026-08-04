@@ -13,10 +13,16 @@ class _FakeNotificationRepository extends NotificationRepository {
   _FakeNotificationRepository() : super(dio: Dio());
 
   final List<String> markedReadIds = [];
+  int deleteAllCallCount = 0;
 
   @override
   Future<void> markAsRead(String id) async {
     markedReadIds.add(id);
+  }
+
+  @override
+  Future<void> deleteAll() async {
+    deleteAllCallCount += 1;
   }
 }
 
@@ -88,6 +94,7 @@ void main() {
     expect(find.text('2 items'), findsOneWidget);
     expect(find.text('Forwarding completed'), findsOneWidget);
     expect(find.text('Welcome to QuickPick!'), findsOneWidget);
+    expect(find.text('Clear all'), findsOneWidget);
   });
 
   testWidgets('does not mark notifications as read when the screen loads', (
@@ -129,4 +136,30 @@ void main() {
       expect(repository.markedReadIds, ['n1']);
     },
   );
+
+  testWidgets('clears all notifications only after confirmation', (
+    tester,
+  ) async {
+    final repository = _FakeNotificationRepository();
+
+    await tester.pumpWidget(
+      _buildTestApp(
+        const NotificationsScreen(),
+        notificationRepository: repository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Clear all'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Clear all notifications?'), findsOneWidget);
+    expect(repository.deleteAllCallCount, 0);
+
+    await tester.tap(find.text('Clear').last);
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteAllCallCount, 1);
+    expect(find.text('All notifications cleared'), findsOneWidget);
+  });
 }

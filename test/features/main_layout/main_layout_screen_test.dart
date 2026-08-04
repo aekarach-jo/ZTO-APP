@@ -171,6 +171,7 @@ List<Override> _baseOverrides() {
         email: 'somchai@email.com',
         phone: '02000000',
         profileImage: '',
+        language: 'en',
       );
     }),
     homeParcelsProvider.overrideWith((ref) async {

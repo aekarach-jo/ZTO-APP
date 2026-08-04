@@ -202,10 +202,7 @@ void main() {
       find.byKey(const ValueKey('send-branch-option-ອານຸສິດ')),
       findsWidgets,
     );
-    expect(
-      find.byKey(const ValueKey('send-branch-option-ມີໄຊ')),
-      findsWidgets,
-    );
+    expect(find.byKey(const ValueKey('send-branch-option-ມີໄຊ')), findsWidgets);
 
     await tester.tap(
       find.byKey(const ValueKey('send-branch-option-ມີໄຊ')).last,
@@ -431,7 +428,6 @@ void main() {
     expect(find.text('Forwarding payment'), findsOneWidget);
 
     // 0.5 kg → billed 1 kg → shipping fee 13,000 kip (LAK, no VAT).
-    // Fee row + total row both render ₭13,000.
     expect(find.text('₭13,000'), findsWidgets);
     expect(find.text('₭910'), findsNothing);
 

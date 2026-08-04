@@ -9,6 +9,7 @@ import '../../../../shared/widgets/custom_text_field.dart';
 import '../../../../shared/widgets/language_toggle_button.dart';
 import '../../../../shared/widgets/primary_button.dart';
 import '../../../../shared/widgets/app_brand_logo.dart';
+import '../../../../shared/widgets/privacy_policy_link.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 import '../../../main_layout/presentation/screens/main_layout_screen.dart';
@@ -218,6 +219,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               child: Text('dont_have_account'.tr()),
                             ),
                           ),
+                          SizedBox(height: 4.h),
+                          const PrivacyPolicyConsentText(),
                         ],
                       ),
                     ),

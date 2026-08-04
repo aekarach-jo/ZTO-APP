@@ -7,6 +7,28 @@ const String laoMobilePrefix = '+85620';
 /// Digits left for the user once [laoMobilePrefix] is taken out.
 const int laoSubscriberDigits = 8;
 
+/// Turns a stored number into the subscriber digits a phone field holds.
+///
+/// Numbers come back from the backend in whatever shape they were saved in —
+/// `2091234567`, `+8562091234567`, `02091234567` — while the field only keeps
+/// what follows the `+856 20` prefix it renders.
+String laoSubscriberDigitsOf(String rawPhone) {
+  var digits = rawPhone.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.startsWith('856')) {
+    digits = digits.substring(3);
+  }
+  if (digits.startsWith('0')) {
+    digits = digits.substring(1);
+  }
+  if (digits.startsWith('20') && digits.length > laoSubscriberDigits) {
+    digits = digits.substring(2);
+  }
+  if (digits.length > laoSubscriberDigits) {
+    digits = digits.substring(0, laoSubscriberDigits);
+  }
+  return digits;
+}
+
 /// Keeps a phone field down to the subscriber digits that follow the
 /// `+856 20` prefix rendered next to it.
 ///

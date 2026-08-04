@@ -11,13 +11,24 @@ class SendParcelItem {
     required this.id,
     required this.title,
     required this.trackNo,
+    this.address = '',
     this.weightKg,
+    this.priceLak,
   });
 
   final String id;
   final String title;
   final String trackNo;
+
+  /// Delivery address the admin imported with the parcel. The forward flow
+  /// prefills the recipient address field with it; empty when not imported.
+  final String address;
+
   final double? weightKg;
+
+  /// The parcel's own price in LAK. A forward order bills this on top of the
+  /// shipping fee, so the summary needs it to preview the real total.
+  final int? priceLak;
 
   factory SendParcelItem.fromJson(Map<String, dynamic> json) {
     final tracking =
@@ -41,7 +52,20 @@ class SendParcelItem {
           ]) ??
           tracking,
       trackNo: tracking.startsWith('#') ? tracking : '#$tracking',
+      address:
+          _readString(json, const [
+            'address',
+            'recipientAddress',
+            'recipient_address',
+            'addressLine',
+          ]) ??
+          '',
       weightKg: _readNum(json, const ['weight']),
+      priceLak: _readNum(json, const [
+        'price',
+        'price_lak',
+        'priceLak',
+      ])?.round(),
     );
   }
 
@@ -124,11 +148,14 @@ class SendRepository {
         .toList(growable: false);
   }
 
-  /// Creates a forward order. The send flow forwards one parcel at a time, but
-  /// the endpoint accepts many, so the single parcel is wrapped in an array.
-  Future<ParcelOrder> createForwardRequest(CreateForwardRequest request) async {
+  /// Creates a single forward order covering every parcel in [parcels]. The
+  /// recipient details are repeated per parcel because the endpoint keys them
+  /// to each `laravelParcelId`.
+  Future<ParcelOrder> createForwardOrder(
+    List<CreateForwardRequest> parcels,
+  ) async {
     final body = <String, dynamic>{
-      'parcels': [request.toJson()],
+      'parcels': [for (final parcel in parcels) parcel.toJson()],
     };
     try {
       final response = await _dio.post<dynamic>('/orders/forward', data: body);
