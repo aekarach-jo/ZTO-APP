@@ -1,10 +1,10 @@
 # Privacy Policy
 
 **App:** CLS Global
-**Provider:** [LEGAL ENTITY NAME]
-**Registered address:** [COMPANY ADDRESS]
-**Contact email:** [privacy@tt-tradingsole.com]
-**Effective date:** [DD MONTH YYYY]
+**Provider:** THONGSING VILAYSAK
+**Registered address:** Kaisone Phomvihane, Savannakhet, Lao PDR
+**Contact email:** zhune.noodle@icloud.com
+**Effective date:** 5 August 2026
 
 This Privacy Policy explains what personal data the CLS Global mobile application collects, why we collect it, how we use and share it, and the choices and rights you have. By creating an account or using the app you agree to this Policy.
 
@@ -26,9 +26,7 @@ We do **not** collect or store full card numbers, CVV codes or bank login creden
 - **Device and push identifiers** — Firebase Cloud Messaging token, device model, operating system version and app version, used to deliver notifications and diagnose errors.
 - **Usage and diagnostic data** — error logs, request timestamps and feature usage, used to keep the app reliable and secure.
 
-- **Location data** — when you tap the button to pin a delivery address on the map, the app reads your device's current position once so the map opens centred on where you are. The position is used only to place the map pin; it is not tracked in the background, not stored on our servers, and not used for any other purpose. The address you finally confirm is saved as shipment data.
-
-The app does **not** collect location in the background or while it is closed.
+The app does not collect precise or background location data. Maps are used only to display branch and delivery addresses.
 
 We do not collect data from children, we do not sell personal data, and we do not use your data for third-party advertising or profiling.
 
@@ -39,7 +37,6 @@ You may decline any permission; only the related feature stops working.
 - **Camera** — to take a profile photo or photograph a document or parcel to send in chat.
 - **Photos and storage** — to select an existing image, and to save a payment QR code or receipt to your gallery when you tap Save.
 - **Notifications** — to send you delivery, payment and chat notifications.
-- **Location (while using the app)** — to centre the map on your current position when you pin a delivery address. If you decline, you can still pin the address manually.
 
 ## 3. How we use your data
 
@@ -68,13 +65,15 @@ Parcels cross borders, so shipment data may be transferred to partners and autho
 ## 6. Data retention
 
 - **Account and profile data** — kept while your account is active.
-- **Shipment and payment records** — kept for [X] years after the transaction to meet accounting, tax and customs obligations, even after account closure.
-- **Chat and support messages** — kept for [X] months.
-- **Diagnostic logs** — kept for up to [90] days.
+- **Shipment and payment records** — kept for 2 years after the transaction to meet accounting, tax and customs obligations, even after account closure.
+- **Chat and support messages** — kept for 1 month.
+- **Diagnostic logs** — kept for up to 90 days.
 
 After the applicable period we delete the data or irreversibly anonymise it.
 
 ## 7. Security
+
+We use technical and organisational safeguards designed to protect personal data, including:
 
 - HTTPS/TLS encryption for all traffic between the app and our servers.
 - Encrypted on-device storage for authentication tokens, using the Android Keystore and iOS Keychain.
@@ -87,15 +86,15 @@ No system is perfectly secure. If a breach affects your personal data we will no
 
 Subject to applicable law, you may access the personal data we hold about you, correct inaccurate data, delete your account and associated data, restrict or object to certain processing, port your data to another provider, withdraw consent for camera, photo or notification access at any time in your device settings, and complain to your local data-protection authority.
 
-Most profile fields can be edited directly in the app under Profile and Edit Profile. To exercise any other right, email **[privacy@tt-tradingsole.com]**. We respond within 30 days.
+Most profile fields can be edited directly in the app under Profile and Edit Profile. To exercise any other right, email **zhune.noodle@icloud.com**. We respond within 30 days.
 
 ## 9. Account and data deletion
 
-You can request deletion of your CLS Global account and personal data by submitting a request at **[https://tt-tradingsole.com/account-deletion]**, or by emailing **[privacy@tt-tradingsole.com]** from the address or phone number registered to your account.
+You can request deletion of your CLS Global account and personal data by submitting a request at **https://tt-tradingsole.com/account-deletion**, or by emailing **zhune.noodle@icloud.com** from the address or phone number registered to your account.
 
 **What is deleted:** your account credentials, profile details and photo, chat messages, push notification tokens, and saved addresses and contacts.
 
-**What is retained and why:** shipment records, invoices and payment references are retained for [X] years in de-identified or restricted form where accounting, tax, customs and transport law requires us to keep them. They are no longer linked to your login and are not used for any other purpose.
+**What is retained and why:** shipment records, invoices and payment references are retained for 1 year in de-identified or restricted form where accounting, tax, customs and transport law requires us to keep them. They are no longer linked to your login and are not used for any other purpose.
 
 Deletion requests are completed within 30 days.
 
@@ -113,7 +112,7 @@ We may update this Policy from time to time. If a change materially affects your
 
 ## 13. Contact us
 
-[LEGAL ENTITY NAME]
-[COMPANY ADDRESS]
-Email: [privacy@tt-tradingsole.com]
-Phone: [+856 XX XXX XXXX]
+THONGSING VILAYSAK
+Kaisone Phomvihane, Savannakhet, Lao PDR
+Email: zhune.noodle@icloud.com
+Phone: +856 20 54936516
