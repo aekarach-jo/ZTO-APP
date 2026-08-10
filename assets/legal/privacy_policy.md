@@ -26,7 +26,9 @@ We do **not** collect or store full card numbers, CVV codes or bank login creden
 - **Device and push identifiers** — Firebase Cloud Messaging token, device model, operating system version and app version, used to deliver notifications and diagnose errors.
 - **Usage and diagnostic data** — error logs, request timestamps and feature usage, used to keep the app reliable and secure.
 
-The app does not collect precise or background location data. Maps are used only to display branch and delivery addresses.
+- **Location data** — when you tap the button to pin a delivery address, or open the screen that sets your default forwarding address, the app reads your device's current position once so the map opens centred on where you are. The position is used only to place the map pin; it is not tracked in the background, not stored on our servers, and not used for any other purpose. If you have already saved a default address, the map uses that address and your position is not read at all. The address you finally confirm is saved as shipment data.
+
+The app does **not** collect location in the background or while it is closed.
 
 We do not collect data from children, we do not sell personal data, and we do not use your data for third-party advertising or profiling.
 
@@ -37,6 +39,7 @@ You may decline any permission; only the related feature stops working.
 - **Camera** — to take a profile photo or photograph a document or parcel to send in chat.
 - **Photos and storage** — to select an existing image, and to save a payment QR code or receipt to your gallery when you tap Save.
 - **Notifications** — to send you delivery, payment and chat notifications.
+- **Location (while using the app)** — to centre the map on your current position when you pin a delivery address. If you decline, you can still pin the address manually.
 
 ## 3. How we use your data
 
