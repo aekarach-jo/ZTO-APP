@@ -14,6 +14,8 @@ class UserAddress {
     required this.label,
     required this.phone,
     required this.addressLine,
+    required this.courier,
+    required this.branchCode,
     required this.latitude,
     required this.longitude,
     required this.isDefault,
@@ -26,6 +28,13 @@ class UserAddress {
   /// backend stores it). May be empty — the field is optional.
   final String phone;
   final String addressLine;
+
+  /// Courier the parcel is forwarded with, and the branch it is delivered to.
+  /// Both prefill the send flow; the branch is stored as a code the app maps to
+  /// a display name (see `kDeliveryBranches`). May be empty.
+  final String courier;
+  final String branchCode;
+
   final double latitude;
   final double longitude;
   final bool isDefault;
@@ -39,6 +48,16 @@ class UserAddress {
         'addressLine',
         'address_line',
         'address',
+      ]),
+      courier: _readString(json, const [
+        'courier',
+        'courierName',
+        'courier_name',
+      ]),
+      branchCode: _readString(json, const [
+        'branchCode',
+        'branch_code',
+        'branch',
       ]),
       latitude: _readDouble(json, const ['lat', 'latitude']) ?? 0,
       longitude: _readDouble(json, const ['lng', 'longitude', 'lon']) ?? 0,
@@ -129,14 +148,20 @@ class AddressRepository {
     required double latitude,
     required double longitude,
     String? phone,
+    String? courier,
+    String? branchCode,
   }) async {
     final body = <String, dynamic>{
       'label': label,
       'addressLine': addressLine,
       'lat': latitude,
       'lng': longitude,
-      if (phone != null && phone.isNotEmpty) 'phone': phone,
     };
+    if (phone != null && phone.isNotEmpty) body['phone'] = phone;
+    if (courier != null && courier.isNotEmpty) body['courier'] = courier;
+    if (branchCode != null && branchCode.isNotEmpty) {
+      body['branchCode'] = branchCode;
+    }
     final response = await _dio.post<dynamic>(_basePath, data: body);
     return UserAddress.fromJson(_unwrapMap(response.data));
   }
@@ -148,6 +173,8 @@ class AddressRepository {
     String? label,
     String? phone,
     String? addressLine,
+    String? courier,
+    String? branchCode,
     double? latitude,
     double? longitude,
     bool? isDefault,
@@ -156,6 +183,8 @@ class AddressRepository {
     if (label != null) body['label'] = label;
     if (phone != null) body['phone'] = phone;
     if (addressLine != null) body['addressLine'] = addressLine;
+    if (courier != null) body['courier'] = courier;
+    if (branchCode != null) body['branchCode'] = branchCode;
     if (latitude != null) body['lat'] = latitude;
     if (longitude != null) body['lng'] = longitude;
     if (isDefault != null) body['isDefault'] = isDefault;

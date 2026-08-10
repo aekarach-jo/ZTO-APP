@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/constants/delivery_branches.dart';
 import '../../../../shared/utils/lao_phone_input.dart';
 import '../../data/address_repository.dart';
 
@@ -17,8 +18,7 @@ import '../../data/address_repository.dart';
 /// prefill that flow as-is.
 ///
 /// Opened without [address] it creates a new entry — which the backend always
-/// makes the default — and hydrates from the current default so editing "my
-/// address" is the common path. With [address] it edits that entry in place.
+/// makes the default. With [address] it edits that entry in place.
 class DefaultForwardingAddressScreen extends ConsumerStatefulWidget {
   const DefaultForwardingAddressScreen({super.key, this.address});
 
@@ -36,6 +36,10 @@ class _DefaultForwardingAddressScreenState
   final _recipientNameController = TextEditingController();
   final _recipientPhoneController = TextEditingController();
   final _recipientAddressController = TextEditingController();
+  final _courierController = TextEditingController();
+
+  /// Delivery branch by display name; stored as [DeliveryBranch.code].
+  String? _selectedBranch;
 
   /// Vientiane — where the pin starts before (or instead of) a device fix.
   static const LatLng _fallbackPinLocation = LatLng(17.9757, 102.6331);
@@ -97,6 +101,10 @@ class _DefaultForwardingAddressScreenState
     _recipientNameController.text = address.label;
     _recipientPhoneController.text = laoSubscriberDigitsOf(address.phone);
     _recipientAddressController.text = address.addressLine;
+    _courierController.text = address.courier;
+    // An unknown code means a branch this build does not list; leave the
+    // dropdown empty rather than silently picking a different branch.
+    _selectedBranch = deliveryBranchNameOf(address.branchCode);
     if (!_hasMovedPinManually &&
         (address.latitude != 0 || address.longitude != 0)) {
       _pinLocation = LatLng(address.latitude, address.longitude);
@@ -113,6 +121,7 @@ class _DefaultForwardingAddressScreenState
     _recipientNameController.dispose();
     _recipientPhoneController.dispose();
     _recipientAddressController.dispose();
+    _courierController.dispose();
     super.dispose();
   }
 
@@ -196,6 +205,8 @@ class _DefaultForwardingAddressScreenState
           latitude: _pinLocation.latitude,
           longitude: _pinLocation.longitude,
           phone: _phoneForApi,
+          courier: _courierController.text.trim(),
+          branchCode: deliveryBranchCodeOf(_selectedBranch),
         );
       } else {
         await repository.updateAddress(
@@ -203,6 +214,8 @@ class _DefaultForwardingAddressScreenState
           label: _recipientNameController.text.trim(),
           phone: _phoneForApi,
           addressLine: _recipientAddressController.text.trim(),
+          courier: _courierController.text.trim(),
+          branchCode: deliveryBranchCodeOf(_selectedBranch) ?? '',
           latitude: _pinLocation.latitude,
           longitude: _pinLocation.longitude,
           isDefault: true,
@@ -236,19 +249,14 @@ class _DefaultForwardingAddressScreenState
 
   @override
   Widget build(BuildContext context) {
-    // Opened from the menu (no entry passed): edit the current default rather
-    // than piling up a new address every time it is saved.
-    if (widget.address == null && !_hydrated) {
-      final defaultAddress = ref.watch(defaultUserAddressProvider);
-      if (defaultAddress != null) {
-        _hydrate(defaultAddress);
-      }
-    }
-
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
       appBar: AppBar(
-        title: Text('profile_forwarding_title'.tr()),
+        title: Text(
+          widget.address == null
+              ? 'profile_address_add'.tr()
+              : 'profile_address_edit'.tr(),
+        ),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF111111),
         elevation: 0,
@@ -283,6 +291,21 @@ class _DefaultForwardingAddressScreenState
             onChanged: (_) => setState(() {}),
             maxLines: 3,
             minLines: 3,
+          ),
+          SizedBox(height: 14.h),
+          _InputLabel(text: 'send_courier_label'.tr()),
+          _InputField(
+            key: const ValueKey('forwarding-input-courier'),
+            hint: 'send_courier_hint'.tr(),
+            controller: _courierController,
+            onChanged: (_) => setState(() {}),
+          ),
+          SizedBox(height: 14.h),
+          _InputLabel(text: 'send_branch_label'.tr()),
+          _BranchDropdown(
+            key: const ValueKey('forwarding-input-branch'),
+            value: _selectedBranch,
+            onChanged: (branch) => setState(() => _selectedBranch = branch),
           ),
           SizedBox(height: 18.h),
           _buildMap(),
@@ -507,6 +530,51 @@ class _InputField extends StatelessWidget {
           fontSize: 14.sp,
           fontWeight: FontWeight.w700,
         ),
+        filled: true,
+        fillColor: const Color(0xFFF3F5F8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14.r),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14.r),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
+      ),
+    );
+  }
+}
+
+class _BranchDropdown extends StatelessWidget {
+  const _BranchDropdown({super.key, required this.value, required this.onChanged});
+
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isExpanded: true,
+      hint: Text(
+        'send_branch_hint'.tr(),
+        style: TextStyle(
+          color: const Color(0xFFA7AFBC),
+          fontSize: 14.sp,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      items: [
+        for (final branch in kDeliveryBranches)
+          DropdownMenuItem<String>(
+            key: ValueKey('forwarding-branch-option-${branch.code}'),
+            value: branch.name,
+            child: Text(branch.name, overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      onChanged: onChanged,
+      decoration: InputDecoration(
         filled: true,
         fillColor: const Color(0xFFF3F5F8),
         border: OutlineInputBorder(

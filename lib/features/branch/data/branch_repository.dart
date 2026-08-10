@@ -28,7 +28,14 @@ class Branch {
   }
 
   /// Short label shown on the toggle (falls back to name when code is empty).
-  String get label => code.isNotEmpty ? code : name;
+  ///
+  /// `KD` is shown as `TT` — display only; the stored/sent code stays `KD`.
+  String get label {
+    if (code.trim().toUpperCase() == 'KD') {
+      return 'TT';
+    }
+    return code.isNotEmpty ? code : name;
+  }
 }
 
 class BranchRepository {

@@ -127,6 +127,7 @@ class PaymentInitiation {
 class OrderPaymentStatus {
   const OrderPaymentStatus({
     required this.isPaid,
+    this.paymentStatus = '',
     this.bankRef,
     this.paidAt,
     this.billNo,
@@ -135,6 +136,14 @@ class OrderPaymentStatus {
   });
 
   final bool isPaid;
+
+  /// Raw order payment status. The backend expires an unpaid onepay order
+  /// after 10 minutes and flips it to `failed`, which is the app's signal to
+  /// stop polling — the QR can never settle after that.
+  final String paymentStatus;
+
+  bool get isFailed => paymentStatus == 'failed';
+
   final String? bankRef;
   final DateTime? paidAt;
 
@@ -150,6 +159,7 @@ class OrderPaymentStatus {
     final json = unwrapDataEnvelope(data);
     return OrderPaymentStatus(
       isPaid: json['isPaid'] == true,
+      paymentStatus: (json['paymentStatus'] ?? '').toString(),
       bankRef: json['bankRef']?.toString(),
       paidAt: json['paidAt'] is String
           ? DateTime.tryParse(json['paidAt'] as String)

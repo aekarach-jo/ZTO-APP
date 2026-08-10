@@ -797,6 +797,15 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
         if (status.isPaid) {
           timer.cancel();
           _markPaid(status);
+          return;
+        }
+        // The backend expired the order (10 minutes unpaid). Nothing can
+        // settle it now, so stop polling and offer a fresh QR.
+        if (status.isFailed) {
+          timer.cancel();
+          setState(() {
+            _isTimedOut = true;
+          });
         }
       } catch (_) {
         // Transient polling errors are ignored; the next tick retries.
@@ -825,6 +834,13 @@ class _ParcelPaymentScreenState extends ConsumerState<ParcelPaymentScreen> {
       if (status.isPaid) {
         _pollTimer?.cancel();
         _markPaid(status);
+        return;
+      }
+      if (status.isFailed) {
+        _pollTimer?.cancel();
+        setState(() {
+          _isTimedOut = true;
+        });
       }
     } catch (_) {
       // Ignore; the periodic poll will retry on its next tick.

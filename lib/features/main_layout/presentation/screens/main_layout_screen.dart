@@ -20,6 +20,7 @@ import '../../../parcel_status/data/parcel_status_repository.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../profile/application/user_language_sync.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
+import '../../../send/application/send_forward_prefill_provider.dart';
 import '../../../send/data/send_repository.dart';
 import '../../../../shared/widgets/privacy_policy_sheet.dart';
 import '../../../send/presentation/screens/send_screen.dart';
@@ -58,6 +59,9 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
       );
     });
   }
+
+  /// Index of the Send tab inside [_customerTabs].
+  static const int _customerSendTabIndex = 1;
 
   List<Widget> get _customerTabs => [
     HomeScreen(),
@@ -147,7 +151,14 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
         currentIndex: _customerTabIndex,
-        onTap: (index) => setState(() => _customerTabIndex = index),
+        onTap: (index) {
+          // Tapping the Send tab while already on it means "start over", the
+          // same way tapping a tab twice usually pops its stack.
+          if (index == _customerTabIndex && index == _customerSendTabIndex) {
+            ref.read(sendFlowResetSignalProvider.notifier).state++;
+          }
+          setState(() => _customerTabIndex = index);
+        },
         showSelectedLabels: false,
         showUnselectedLabels: false,
         selectedItemColor: AppTheme.brandBlue,

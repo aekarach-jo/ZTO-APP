@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/constants/delivery_branches.dart';
 import '../../../../shared/utils/lak_currency.dart';
 import '../../../../shared/utils/lao_phone_input.dart';
 import '../../application/send_forward_prefill_provider.dart';
@@ -56,16 +57,21 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   /// itself, so comparing coordinates is not enough to tell the two apart.
   bool _hasPinTarget = false;
 
-  /// The recipient step is prefilled once per flow. Re-running it on every
-  /// visit would wipe edits made after the first pass.
+  /// The recipient step is prefilled once per flow, and again whenever the
+  /// default address changes. [_prefilledFromAddressId] is the entry the last
+  /// pass used; the rest is what it wrote, so the next pass can tell an
+  /// untouched field from one the customer edited.
   bool _hasPrefilledRecipient = false;
+  String? _prefilledFromAddressId;
+  String _prefilledName = '';
+  String _prefilledPhone = '';
+  String _prefilledAddress = '';
+  String _prefilledCourier = '';
+  String? _prefilledBranch;
 
-  /// The branches parcels can be delivered to.
-  static const List<String> _deliveryBranches = [
-    'ອານຸສິດ',
-    'ຮຸ່ງອາລຸນ',
-    'ມີໄຊ',
-  ];
+  /// The branches parcels can be delivered to, by display name. The address
+  /// book stores the matching code (see `kDeliveryBranches`).
+  static const List<String> _deliveryBranches = kDeliveryBranchNames;
 
   /// Order ที่สร้างไว้แล้วสำหรับ flow ปัจจุบัน — กันการสร้าง order ซ้ำ
   /// ถ้าผู้ใช้ย้อนกลับจากหน้าชำระเงินแล้วกดยืนยันอีกครั้ง
@@ -102,43 +108,80 @@ class _SendScreenState extends ConsumerState<SendScreen> {
 
   /// Prefills the recipient step: the address comes from the parcel the admin
   /// imported, everything else from the customer's default address book entry.
-  /// Only untouched fields are filled, so anything already typed survives.
+  ///
+  /// Runs again whenever the default address changes — picking a new default in
+  /// the address book has to show up here — but only overwrites fields still
+  /// holding what the last prefill wrote, so typed-in edits survive.
   void _prefillRecipientDetails(List<SendParcelItem> selectedItems) {
-    if (_hasPrefilledRecipient) {
+    final defaultAddress = ref.read(defaultUserAddressProvider);
+    if (_hasPrefilledRecipient &&
+        defaultAddress?.id == _prefilledFromAddressId) {
       return;
     }
     _hasPrefilledRecipient = true;
+    _prefilledFromAddressId = defaultAddress?.id;
 
     // One order carries one recipient, so a batch prefills from its first
     // parcel; the customer can still correct the address by hand.
     final parcelAddress = selectedItems
         .map((item) => item.address)
         .firstWhere((address) => address.isNotEmpty, orElse: () => '');
-    if (parcelAddress.isNotEmpty && _recipientAddressController.text.isEmpty) {
-      _recipientAddressController.text = parcelAddress;
+    final addressText = parcelAddress.isNotEmpty
+        ? parcelAddress
+        : (defaultAddress?.addressLine ?? '');
+
+    _prefilledName = _applyPrefill(
+      _recipientNameController,
+      _prefilledName,
+      defaultAddress?.label ?? '',
+    );
+    _prefilledPhone = _applyPrefill(
+      _recipientPhoneController,
+      _prefilledPhone,
+      laoSubscriberDigitsOf(defaultAddress?.phone ?? ''),
+    );
+    _prefilledAddress = _applyPrefill(
+      _recipientAddressController,
+      _prefilledAddress,
+      addressText,
+    );
+    _prefilledCourier = _applyPrefill(
+      _courierController,
+      _prefilledCourier,
+      defaultAddress?.courier ?? '',
+    );
+
+    // An unknown code means a branch this build does not list; leave the
+    // dropdown empty rather than silently picking a different branch.
+    final branch = deliveryBranchNameOf(defaultAddress?.branchCode);
+    if (_selectedBranch == null || _selectedBranch == _prefilledBranch) {
+      _selectedBranch = branch ?? _selectedBranch;
+      _prefilledBranch = branch;
     }
 
-    final defaultAddress = ref.read(defaultUserAddressProvider);
-    if (defaultAddress == null) {
-      return;
-    }
-
-    if (_recipientNameController.text.isEmpty) {
-      _recipientNameController.text = defaultAddress.label;
-    }
-    if (_recipientPhoneController.text.isEmpty) {
-      _recipientPhoneController.text = laoSubscriberDigitsOf(
-        defaultAddress.phone,
-      );
-    }
-    if (_recipientAddressController.text.isEmpty) {
-      _recipientAddressController.text = defaultAddress.addressLine;
-    }
     if (!_hasMovedPinManually &&
+        defaultAddress != null &&
         (defaultAddress.latitude != 0 || defaultAddress.longitude != 0)) {
       _pinLocation = LatLng(defaultAddress.latitude, defaultAddress.longitude);
       _hasPinTarget = true;
     }
+  }
+
+  /// Writes [next] into [controller] when the field is empty or still holds
+  /// [previous] — i.e. the customer has not typed over it — and returns the
+  /// value the field now counts as prefilled with. An empty [next] clears an
+  /// untouched field, so switching to an address without a courier does not
+  /// leave the old one behind.
+  String _applyPrefill(
+    TextEditingController controller,
+    String previous,
+    String next,
+  ) {
+    if (controller.text.isEmpty || controller.text == previous) {
+      controller.text = next;
+      return next;
+    }
+    return previous;
   }
 
   /// Starts the recipient pin on the device's own position. Anything that can
@@ -205,6 +248,17 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   @override
   Widget build(BuildContext context) {
     final parcelsAsync = ref.watch(sendParcelsProvider);
+
+    // Send tab tapped while already on it: drop whatever half-filled flow is
+    // on screen and go back to picking parcels.
+    ref.listen<int>(sendFlowResetSignalProvider, (previous, next) {
+      if (previous == null || previous == next) {
+        return;
+      }
+      setState(() {
+        _resetFlow();
+      });
+    });
 
     // Forward tapped in the Parcel tab: pre-select those parcels and jump
     // straight to the recipient-details step.
@@ -992,6 +1046,12 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     _hasMovedPinManually = false;
     _hasPinTarget = false;
     _hasPrefilledRecipient = false;
+    _prefilledFromAddressId = null;
+    _prefilledName = '';
+    _prefilledPhone = '';
+    _prefilledAddress = '';
+    _prefilledCourier = '';
+    _prefilledBranch = null;
     _createdOrder = null;
     _recipientNameController.clear();
     _recipientPhoneController.clear();
