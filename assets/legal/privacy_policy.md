@@ -97,7 +97,7 @@ You can request deletion of your CLS Global account and personal data by submitt
 
 **What is deleted:** your account credentials, profile details and photo, chat messages, push notification tokens, and saved addresses and contacts.
 
-**What is retained and why:** shipment records, invoices and payment references are retained for 1 year in de-identified or restricted form where accounting, tax, customs and transport law requires us to keep them. They are no longer linked to your login and are not used for any other purpose.
+**What is retained and why:** shipment records, invoices and payment references are retained for 2 years in de-identified or restricted form where accounting, tax, customs and transport law requires us to keep them. They are no longer linked to your login and are not used for any other purpose.
 
 Deletion requests are completed within 30 days.
 
